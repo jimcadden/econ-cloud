@@ -39,3 +39,18 @@
   * consumer has unknown/dynamic requirements 
     * i.e., a website either will get 1M hits or almost nothing
   * 3rd party market w/ exchange rates between providers 
+
+
+#
+#
+# SimPY Simulation Library
+
+Processes Class
+  * consumer activator 
+  * consumers
+Level Classs
+  * privider resource 
+Store Classes
+  * reseller market item
+
+
