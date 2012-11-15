@@ -1,0 +1,12 @@
+Utilization,Level,Instance Type,Compute Units,Rate On-demand,Upfront 1YR,Rate 1YR,Upfront 3YR,Rate 3YR
+light,Standard,small,1,0.065,69,0.039,106.3,0.031
+light,Standard,medium,2,0.13,138,0.078,212.5,0.063
+light,Standard,large,4,0.26,279,0.156,425.2,0.124
+light,Standard,extra large,8,0.52,552,0.312,850.4,0.248
+light,Second Generation,extra large,13,0.58,607,0.334,935,0.272
+light,Second Generation,double extra large,26,1.16,1214,0.688,1870,0.554
+light,High-CPU,medium,5,0.165,178,0.1,273,0.088
+light,High-CPU,extra large,20,0.66,712,0.4,1092,0.352
+light,Cluster Compute,quadruple extra large,33.5,1.3,1450,0.742,2225,0.742
+light,Cluster Compute,eight extra large,88,2.4,1762,0.904,2710,0.904
+light,Cluster GPU,quadruple extra large,33.5,2.1,2410,1.234,3700,1.234
