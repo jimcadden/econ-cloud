@@ -37,13 +37,9 @@ import math
 import random
 import csv, codecs, cStringIO
 from SimPy.Simulation import *
+from CSVUtility import *
   
 ## experimental data  ################################################ 
-
-MAX_CONSUMERS = 10000
-MAXWORK = 50
-MAXTIME  = 10000000000
-
 
 class CSVExport:
     """
@@ -165,24 +161,26 @@ class Consumer(Process):
 ## stage ############################################################# 
 
 class Marketplace(Simulation):
-  def __init__(self, name, instances, consumer_count):
+  def __init__(self, name, instances, consumer_count, maxwork, maxtime):
     Simulation.__init__(self)
     self.name = name
     self.instances = instances 
     self.consumer_count = consumer_count
+    self.maxwork = maxwork
+    self.maxtime = maxtime
     self.consumers = []
 
   def generate_work(self):
     """ generate a random work amount for consumer """
-    return random.randint(1, MAXWORK) # replace with a gaussian range? 
+    return random.randint(1, self.maxwork) # replace with a gaussian range? 
 
   def generate_start(self):
     """ generate a random arrival time for consumer """
-    return random.randint(0, MAXTIME - MAXWORK) # we may need min unit-val 
+    return random.randint(0, self.maxtime - self.maxwork) # we may need min unit-val 
 
   def generate_deadline(self):
     """ generate a random deadline for consumer """
-    return random.randint(MAXWORK, MAXTIME) # this is very wrong
+    return random.randint(0, 1) # this is very wrong
 
   def spawn_consumers(self):
     """ spawn and activate consumers for simulation """
@@ -196,7 +194,7 @@ class Marketplace(Simulation):
     self.initialize()
     print self.now(), ':', self.name, 'started',self.consumer_count,'consumers'
     self.spawn_consumers()
-    self.simulate(until=MAXTIME)
+    self.simulate(until=self.maxtime)
 
   def finish(self):
     print self.now(), ':', self.name, 'finished.'
@@ -260,18 +258,4 @@ class CSVImport:
     def dump(self):
       for i in self.data:
         print i
-
-
-if __name__=="__main__":
-
-  ec2data = CSVImport('ec2rates-useast_11-09-12.csv')
-  ec2data_nopar = CSVImport('ec2rates-useast_11-09-12_nopar.csv')
-
-  sim1 = Marketplace( name = "basic", instances = ec2data_nopar.instances(), \
-      consumer_count = MAX_CONSUMERS)
-  sim1.start()
-  sim1.results("filename")
-  sim1.finish()
-
-
 # fin.
