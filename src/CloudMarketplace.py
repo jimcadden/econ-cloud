@@ -137,7 +137,7 @@ class Marketplace(Simulation):
     self.name = name
     self.instances = instances 
     self.consumer_specs = consumers
-    self.consumer_count = len(consumers)
+    self.consumer_count = len(consumers['work'])
     self.maxtime = maxtime
     self.consumers = []
 
@@ -165,8 +165,13 @@ class Marketplace(Simulation):
     return return_list
 
   def results_cons(self):
-    return_list = []
+    return_set = {'name':[],'work':[],'cost':[],'start':[],'finish':[]}
     for cons in self.consumers:
-      return_list.append(cons.results())
-    return return_list
+      i = cons.results()
+      return_set['name'].append(i[0])
+      return_set['work'].append(i[1])
+      return_set['cost'].append(i[2])
+      return_set['start'].append(i[3])
+      return_set['finish'].append(i[4])
+    return return_set
 # fin.
