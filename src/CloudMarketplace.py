@@ -25,9 +25,7 @@ TODO:
 '''
 import math
 import random
-import csv, codecs, cStringIO
 from SimPy.Simulation import *
-from CSVUtility import *
 
 # Props ##################################################################### 
 
@@ -55,10 +53,6 @@ class Instance():
     self.lease = lease     # package class
     self.invoked = 0       # statistics
 
-  def maxunits(self, l=self.lease, u=self.unit):
-    return math.floor(l.length / u.time)
-  #max work?
-  
   """
   we are given a requested amount of work.  Return the work completed, work
   remaining, total cost and efficiency for this instance 
@@ -66,7 +60,7 @@ class Instance():
   def analyize(self, work):
     # partial units consumed are billed as a full unit 
     req_units = math.ceil(work / self.unit.capacity) # requested units
-    max_units = maxunits() #math.floor(self.lease.length / self.unit.time)  
+    max_units = math.floor(self.lease.length / self.unit.time)  
     rmdr = 0
     rtime = 0 # remaining time on lease
     # on-demand leases have a zero length 
@@ -77,7 +71,7 @@ class Instance():
         rmdr = work - (max_units * self.unit.capacity)
         work = max_units * self.unit.capacity
       # endif
-      rtime = self.lease.lenth - (req_units * self.unit.time)
+      rtime = self.lease.length - (req_units * self.unit.time)
     # cost = downpayment + (units# * basecost * discount)
     cost =  self.lease.downp + req_units * self.unit.cost * self.lease.puc
     time = req_units * self.unit.time
@@ -139,52 +133,41 @@ class Consumer(Process):
 ## stage ############################################################# 
 
 class Marketplace(Simulation):
-  def __init__(self, name, instances, consumer_count, maxwork, maxtime):
+  def __init__(self, name, instances, consumers, maxtime=100000000):
     Simulation.__init__(self)
     self.name = name
     self.instances = instances 
-    self.consumer_count = consumer_count
-    self.maxwork = maxwork
+    self.consumer_specs = consumers
+    self.consumer_count = len(consumers)
     self.maxtime = maxtime
     self.consumers = []
 
-  def generate_work(self):
-    """ generate a random work amount for consumer """
-    return random.randint(1, self.maxwork) # replace with a gaussian range? 
-
-  def generate_start(self):
-    """ generate a random arrival time for consumer """
-    return random.randint(0, self.maxtime - self.maxwork) # we may need min unit-val 
-
-  def generate_deadline(self):
-    """ generate a random deadline for consumer """
-    return random.randint(0, 1) # this is very wrong
-
-  def spawn_consumers(self):
+  def spawn_consumers(self, consumers):
     """ spawn and activate consumers for simulation """
-    for i in range(self.consumer_count):
-      con = Consumer(name="con_%s"%i, work=self.generate_work(), \
-          start=self.generate_start(), sim=self)
+    for i in consumers:
+      con = Consumer(name="con_%s"%i, work=i['work'], \
+          start=i['start'], sim=self)
       self.consumers.append(con)
       self.activate(con, con.purchase(), at=con.start)
 
   def start(self):
     self.initialize()
     print self.now(), ':', self.name, 'started',self.consumer_count,'consumers'
-    self.spawn_consumers()
+    self.spawn_consumers(self.consumer_specs)
     self.simulate(until=self.maxtime)
 
   def finish(self):
     print self.now(), ':', self.name, 'finished.'
 
-  def results(self, filename):
-    filea = self.name+"_inst";
-    inst_out = CSVExport(filea)
-    fileb = self.name+"_cons";
-    cons_out = CSVExport(fileb)
-    # ---  
+  def results_inst(self):
+    return_list = []
     for inst in self.instances:
-      inst_out.writerow(inst.results())
+      return_list.append(inst.results())
+    return return_list
+
+  def results_cons(self):
+    return_list = []
     for cons in self.consumers:
-      cons_out.writerow(cons.results())
+      return_list.append(cons.results())
+    return return_list
 # fin.

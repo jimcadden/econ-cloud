@@ -1,6 +1,7 @@
 """
  Main test file 
 """
+import csv, codecs, cStringIO
 from CSVUtility import *
 from CloudMarketplace import *
 from CloudSecondary import *
@@ -36,14 +37,22 @@ def instances(data):
     count += 1
   return ilist
 
+def loadconsumers():
+  ilist = []
+  ilist.append({'work':1000, 'start':0})
+  ilist.append({'work':1000, 'start':0})
+  ilist.append({'work':1000, 'start':0})
+  return ilist
+
 def main():
   ec2 = CSVImport('ec2rates-useast_11-09-12.csv')
   ec2_nopar = CSVImport('ec2rates-useast_11-09-12_nopar.csv')
-
-  sim1 = Marketplace_2DRY( name = "basic", instances = instances(ec2_nopar.data), \
-      consumer_count = MAX_CONSUMERS, maxwork = MAXWORK, maxtime= MAXTIME)
+# def __init__(self, name, instances, consumers):
+  sim1 = Marketplace( name = "basic", \
+      instances = instances(ec2_nopar.data), consumers = loadconsumers())
   sim1.start()
-  sim1.results("filename")
+  print sim1.results_inst()
+  print sim1.results_cons()
   sim1.finish()
 
 # standard boilerplate
