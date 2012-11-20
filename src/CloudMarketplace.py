@@ -24,7 +24,6 @@ TODO:
 
 '''
 import math
-import random
 from SimPy.Simulation import *
 
 # Props ##################################################################### 
@@ -142,11 +141,11 @@ class Marketplace(Simulation):
     self.maxtime = maxtime
     self.consumers = []
 
-  def spawn_consumers(self, consumers):
+  def spawn_consumers(self, specs):
     """ spawn and activate consumers for simulation """
-    for i in consumers:
-      con = Consumer(name="con_%s"%i, work=i['work'], \
-          start=i['start'], sim=self)
+    for i in range(len(specs['work'])):
+      con = Consumer(name="con_%s"%i, work=specs['work'][i], \
+          start=specs['start_time'][i], sim=self)
       self.consumers.append(con)
       self.activate(con, con.purchase(), at=con.start)
 
