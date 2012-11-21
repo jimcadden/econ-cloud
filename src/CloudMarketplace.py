@@ -51,6 +51,10 @@ class Instance():
     self.unit = unit       # unit classes
     self.lease = lease     # package class
     self.invoked = 0       # statistics
+    self.income = 0
+    self.work = 0
+    self.time = 0
+    self.unused = 0
 
   """
   we are given a requested amount of work.  Return the work completed, work
@@ -60,24 +64,22 @@ class Instance():
     # partial units consumed are billed as a full unit 
     req_units = math.ceil(work / self.unit.capacity) # requested units
     max_units = math.floor(self.lease.length / self.unit.time)  
-    rmdr = 0
+    rmdr = 0 # remaning work
     rtime = 0 # remaining time on lease
-    # on-demand leases have a zero length 
+    """ on-demand leases have a zero length """
     if (self.lease.length > 0):
-      # a fixed lease can processes limited number of units
-      if (req_units > max_units):
+      """ a fixed lease can processes limited number of units"""
+      if (req_units > max_units): #we need more work than lease allows
         req_units = max_units
         rmdr = work - (max_units * self.unit.capacity)
         work = max_units * self.unit.capacity
       # endif
       rtime = self.lease.length - (req_units * self.unit.time)
-    # cost = downpayment + (units# * basecost * discount)
-    cost =  self.lease.downp + req_units * self.unit.cost * self.lease.puc
+    #endif
+    cost =  self.lease.downp + (req_units * (self.unit.cost * self.lease.puc))
     time = req_units * self.unit.time
-    rate = work / time # work rate
-    cpr = rate / cost # cost efficency 
-
-    #print self.name, " analysis:", cost, req_units, rmdr, time
+    rate = work / cost
+    cpr = rate / time # instance efficency 
     return {'cost': cost, 'time': time, 'work':work, 'rmdr': rmdr,
         'rate':rate, 'cpr':cpr, 'rtime':rtime}
   
@@ -96,42 +98,49 @@ class Consumer(Process):
     Process.__init__(self, name=name, sim=sim)
     self.work =  work
     self.rmdr =  work
-    self.spent = 0
     self.start = start
+    self.spent = 0
     self.finish = 0
+    self.rtime = 0
 
-  """ search list best cost efficiency """
+  """ search list for best cost efficiency, i.e, most work per dollar  """
   def shop(self, work, instance_list):
     prev = 0
     for inst in instance_list: 
-      # there has to be a better way code this...
-      data = inst.analyize(work)
+      data = inst.analyize(work) # get instance report for data
       tmp = data['cpr'] 
       if tmp >= prev or prev == 0:
         prev = tmp
         rtn = data
         rtn['inst'] = inst
+    """ update provider stats """
+    self.sim.income += rtn['cost']
+    """ update instance stats """
     rtn['inst'].invoked += 1
-   # print "======================================\n", rtn['inst'].results()
+    rtn['inst'].income += rtn['cost']
+    rtn['inst'].work +=   rtn['work']
+    rtn['inst'].time +=   rtn['time']
+    rtn['inst'].unused += rtn['rtime']
+    """ update individual stats """
+    self.spent += data['cost']
+    self.rtime += data['rtime']
+    self.rmdr = data['rmdr']
     return rtn
 
   """ purchase resource based on the results of financial analysis """
   def purchase(self):
     while self.rmdr > 0:
       data = self.shop(self.rmdr, self.sim.instances)
-      self.spent += data['cost']
-      self.rmdr = data['rmdr']
       yield hold, self, data['time']
     self.finish = self.sim.now()
 
   def results(self):
     """ return consumer data list """
-    ## XXX: UNISED MINUTES????
-    time = self.finish - self.start
-    rate = self.work / time
-    cpr = rate / self.spent 
+    time = self.finish - self.start # total time
+    rate = self.work / self.spent # work per dollar
+    cpr = rate / time # 
     return [self.name, self.work, self.spent, time,  self.start, self.finish,
-        rate, cpr] 
+        rate, cpr, self.rtime] 
 
 
 ## stage ############################################################# 
@@ -145,6 +154,7 @@ class Marketplace(Simulation):
     self.consumer_count = len(consumers['work'])
     self.maxtime = maxtime
     self.consumers = []
+    self.income = 0
 
   def spawn_consumers(self, specs):
     """ spawn and activate consumers for simulation """
