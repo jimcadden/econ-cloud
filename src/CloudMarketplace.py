@@ -24,7 +24,6 @@ TODO:
 
 '''
 import math
-import random
 from SimPy.Simulation import *
 
 # Props ##################################################################### 
@@ -52,6 +51,10 @@ class Instance():
     self.unit = unit       # unit classes
     self.lease = lease     # package class
     self.invoked = 0       # statistics
+    self.income = 0
+    self.work = 0
+    self.time = 0
+    self.unused = 0
 
   """
   we are given a requested amount of work.  Return the work completed, work
@@ -61,24 +64,24 @@ class Instance():
     # partial units consumed are billed as a full unit 
     req_units = math.ceil(work / self.unit.capacity) # requested units
     max_units = math.floor(self.lease.length / self.unit.time)  
-    rmdr = 0
+    rmdr = 0 # remaning work
     rtime = 0 # remaining time on lease
-    # on-demand leases have a zero length 
+    """ on-demand leases have a zero length """
     if (self.lease.length > 0):
-      # a fixed lease can processes limited number of units
-      if (req_units > max_units):
+      """ a fixed lease can processes limited number of units"""
+      if (req_units > max_units): #we need more work than lease allows
         req_units = max_units
         rmdr = work - (max_units * self.unit.capacity)
         work = max_units * self.unit.capacity
       # endif
       rtime = self.lease.length - (req_units * self.unit.time)
-    # cost = downpayment + (units# * basecost * discount)
-    cost =  self.lease.downp + req_units * self.unit.cost * self.lease.puc
+    #endif
+    cost =  self.lease.downp + (req_units * (self.unit.cost * self.lease.puc))
     time = req_units * self.unit.time
-    rate = work / time # work rate
-    cpr = rate / cost # cost efficency 
-
-    #print self.name, " analysis:", cost, req_units, rmdr, time
+    rate = work / cost
+    cpr = rate / time # instance efficency 
+    #print ">", self.desc,"\n" \
+    #"work/cost/time/rate/cpr:",work,cost,time,rate,cpr
     return {'cost': cost, 'time': time, 'work':work, 'rmdr': rmdr,
         'rate':rate, 'cpr':cpr, 'rtime':rtime}
   
@@ -97,37 +100,54 @@ class Consumer(Process):
     Process.__init__(self, name=name, sim=sim)
     self.work =  work
     self.rmdr =  work
-    self.spent = 0
     self.start = start
+    self.spent = 0
     self.finish = 0
+    self.rtime = 0
 
-  """ search list best cost efficiency """
-  def shop(self, work, instance_list):
+  """ search list for best cost efficiency, i.e, most work per dollar  """
+  def shop_for_cpr(self, work, instance_list):
     prev = 0
     for inst in instance_list: 
-      # there has to be a better way code this...
-      data = inst.analyize(work)
+      data = inst.analyize(work) # get instance report for data
       tmp = data['cpr'] 
       if tmp >= prev or prev == 0:
         prev = tmp
         rtn = data
         rtn['inst'] = inst
-    rtn['inst'].invoked += 1
-   # print "======================================\n", rtn['inst'].results()
     return rtn
 
   """ purchase resource based on the results of financial analysis """
-  def purchase(self):
+  def purchase(self, work, instance_list):
+    """ shop for the highest cost effectivness """
+    rtn = self.shop_for_cpr(work, instance_list)
+    #print "PURCHASED:", rtn['inst'].desc, rtn['cost'],rtn['cpr']
+    """ update simulation statistics """
+    self.sim.income += rtn['cost']
+    rtn['inst'].invoked += 1
+    rtn['inst'].income += rtn['cost']
+    rtn['inst'].work +=   rtn['work']
+    rtn['inst'].time +=   rtn['time']
+    rtn['inst'].unused += rtn['rtime']
+    self.spent += rtn['cost']
+    self.rtime += rtn['rtime']
+    self.rmdr = rtn['rmdr']
+    return rtn
+
+  """ process work by purchasing instances """
+  def process(self):
     while self.rmdr > 0:
-      data = self.shop(self.rmdr, self.sim.instances)
-      self.spent += data['cost']
-      self.rmdr = data['rmdr']
+      data = self.purchase(self.rmdr, self.sim.instances)
       yield hold, self, data['time']
     self.finish = self.sim.now()
 
   def results(self):
     """ return consumer data list """
-    return [self.name, self.work, self.spent, self.start, self.finish] 
+    time = self.finish - self.start # total time
+    rate = self.work / self.spent # work per dollar
+    cpr = rate / time # 
+    return [self.name, self.work, self.spent, time,  self.start, self.finish,
+        rate, cpr, self.rtime] 
 
 
 ## stage ############################################################# 
@@ -138,17 +158,18 @@ class Marketplace(Simulation):
     self.name = name
     self.instances = instances 
     self.consumer_specs = consumers
-    self.consumer_count = len(consumers)
+    self.consumer_count = len(consumers['work'])
     self.maxtime = maxtime
     self.consumers = []
+    self.income = 0
 
-  def spawn_consumers(self, consumers):
+  def spawn_consumers(self, specs):
     """ spawn and activate consumers for simulation """
-    for i in consumers:
-      con = Consumer(name="con_%s"%i, work=i['work'], \
-          start=i['start'], sim=self)
+    for i in range(len(specs['work'])):
+      con = Consumer(name="con_%s"%i, work=specs['work'][i], \
+          start=specs['start_time'][i], sim=self)
       self.consumers.append(con)
-      self.activate(con, con.purchase(), at=con.start)
+      self.activate(con, con.process(), at=con.start)
 
   def start(self):
     self.initialize()
@@ -166,8 +187,17 @@ class Marketplace(Simulation):
     return return_list
 
   def results_cons(self):
-    return_list = []
+    return_set = {'name':[],'work':[],'cost':[], 'time':[], 'rate':[],
+        'cpr':[],'start':[],'finish':[]}
     for cons in self.consumers:
-      return_list.append(cons.results())
-    return return_list
+      i = cons.results()
+      return_set['name'].append(i[0])
+      return_set['work'].append(i[1])
+      return_set['cost'].append(i[2])
+      return_set['time'].append(i[3])
+      return_set['start'].append(i[4])
+      return_set['finish'].append(i[5])
+      return_set['rate'].append(i[6])
+      return_set['cpr'].append(i[7])
+    return return_set
 # fin.
