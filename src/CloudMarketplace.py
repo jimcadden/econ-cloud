@@ -144,10 +144,8 @@ class Consumer(Process):
   def results(self):
     """ return consumer data list """
     time = self.finish - self.start # total time
-    rate = self.work / self.spent # work per dollar
-    cpr = rate / time # 
-    return [self.name, self.work, self.spent, time,  self.start, self.finish,
-        rate, cpr, self.rtime] 
+    return [self.name, self.work, self.spent, time, self.start, self.finish,
+        self.rtime] 
 
 
 ## stage ############################################################# 
@@ -187,8 +185,8 @@ class Marketplace(Simulation):
     return return_list
 
   def results_cons(self):
-    return_set = {'name':[],'work':[],'cost':[], 'time':[], 'rate':[],
-        'cpr':[],'start':[],'finish':[]}
+    return_set = {'name':[],'work':[],'cost':[], 'time':[],
+        'start':[],'finish':[]}
     for cons in self.consumers:
       i = cons.results()
       return_set['name'].append(i[0])
@@ -197,7 +195,5 @@ class Marketplace(Simulation):
       return_set['time'].append(i[3])
       return_set['start'].append(i[4])
       return_set['finish'].append(i[5])
-      return_set['rate'].append(i[6])
-      return_set['cpr'].append(i[7])
     return return_set
 # fin.
