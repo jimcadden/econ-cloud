@@ -80,6 +80,8 @@ class Instance():
     time = req_units * self.unit.time
     rate = work / cost
     cpr = rate / time # instance efficency 
+    #print ">", self.desc,"\n" \
+    #"work/cost/time/rate/cpr:",work,cost,time,rate,cpr
     return {'cost': cost, 'time': time, 'work':work, 'rmdr': rmdr,
         'rate':rate, 'cpr':cpr, 'rtime':rtime}
   
@@ -104,7 +106,7 @@ class Consumer(Process):
     self.rtime = 0
 
   """ search list for best cost efficiency, i.e, most work per dollar  """
-  def shop(self, work, instance_list):
+  def shop_for_cpr(self, work, instance_list):
     prev = 0
     for inst in instance_list: 
       data = inst.analyize(work) # get instance report for data
@@ -113,24 +115,29 @@ class Consumer(Process):
         prev = tmp
         rtn = data
         rtn['inst'] = inst
-    """ update provider stats """
+    return rtn
+
+  """ purchase resource based on the results of financial analysis """
+  def purchase(self, work, instance_list):
+    """ shop for the highest cost effectivness """
+    rtn = self.shop_for_cpr(work, instance_list)
+    #print "PURCHASED:", rtn['inst'].desc, rtn['cost'],rtn['cpr']
+    """ update simulation statistics """
     self.sim.income += rtn['cost']
-    """ update instance stats """
     rtn['inst'].invoked += 1
     rtn['inst'].income += rtn['cost']
     rtn['inst'].work +=   rtn['work']
     rtn['inst'].time +=   rtn['time']
     rtn['inst'].unused += rtn['rtime']
-    """ update individual stats """
-    self.spent += data['cost']
-    self.rtime += data['rtime']
-    self.rmdr = data['rmdr']
+    self.spent += rtn['cost']
+    self.rtime += rtn['rtime']
+    self.rmdr = rtn['rmdr']
     return rtn
 
-  """ purchase resource based on the results of financial analysis """
-  def purchase(self):
+  """ process work by purchasing instances """
+  def process(self):
     while self.rmdr > 0:
-      data = self.shop(self.rmdr, self.sim.instances)
+      data = self.purchase(self.rmdr, self.sim.instances)
       yield hold, self, data['time']
     self.finish = self.sim.now()
 
@@ -162,7 +169,7 @@ class Marketplace(Simulation):
       con = Consumer(name="con_%s"%i, work=specs['work'][i], \
           start=specs['start_time'][i], sim=self)
       self.consumers.append(con)
-      self.activate(con, con.purchase(), at=con.start)
+      self.activate(con, con.process(), at=con.start)
 
   def start(self):
     self.initialize()
