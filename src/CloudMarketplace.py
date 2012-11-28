@@ -1,4 +1,3 @@
-
 """ This is a basic simulation of consumer-producer market model using the
 SimPY library. """
 
