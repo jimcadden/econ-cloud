@@ -79,9 +79,8 @@ class Instance():
     cost =  self.lease.downp + (req_units * (self.unit.cost * self.lease.puc))
     time = req_units * self.unit.time
     rate = work / cost
-    cpr = rate / time # instance efficency 
-    #print ">", self.desc,"\n" \
-    #"work/cost/time/rate/cpr:",work,cost,time,rate,cpr
+    cpr = work / cost / time # instance efficency 
+    print ">", self.desc,":",cpr, rtime
     return {'cost': cost, 'time': time, 'work':work, 'rmdr': rmdr,
         'rate':rate, 'cpr':cpr, 'rtime':rtime}
   
@@ -91,7 +90,6 @@ class Instance():
         self.unit.cost, self.lease.puc, (self.unit.cost * self.lease.puc),\
         self.lease.length, self.lease.downp] 
     
-
 ## actors  ########################################################### 
 
 class Consumer(Process):
@@ -121,7 +119,7 @@ class Consumer(Process):
   def purchase(self, work, instance_list):
     """ shop for the highest cost effectivness """
     rtn = self.shop_for_cpr(work, instance_list)
-    #print "PURCHASED:", rtn['inst'].desc, rtn['cost'],rtn['cpr']
+    print self.name," PURCHASED:", rtn['inst'].desc, rtn['cost'],rtn['cpr'], rtn['rtime']
     """ update simulation statistics """
     self.sim.income += rtn['cost']
     rtn['inst'].invoked += 1
@@ -162,6 +160,7 @@ class Marketplace(Simulation):
     self.maxtime = maxtime
     self.consumers = []
     self.income = 0
+    self.finished = 0 # jobs completed 
 
   def spawn_consumers(self, specs):
     """ spawn and activate consumers for simulation """
@@ -179,6 +178,9 @@ class Marketplace(Simulation):
 
   def finish(self):
     print self.now(), ':', self.name, 'finished.'
+
+  def results_primary(self):
+    print "Primary Market Stats"
 
   def results_inst(self):
     return_list = []

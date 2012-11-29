@@ -6,8 +6,8 @@ from CSVUtility import *
 from CloudMarketplace import *
 from CloudSecondary import *
 
-MAX_CONSUMERS = 100
-MAXWORK = 500
+MAX_CONSUMERS = 4
+MAXWORK = 1000
 MAXTIME  = 1000000
 
 def instances(data):
@@ -19,7 +19,6 @@ def instances(data):
     puc1YR = float(row['Rate 1YR']) / float(row['Rate On-demand'])
     puc3YR = float(row['Rate 3YR']) / float(row['Rate On-demand'])
 
-    #TODO: year/time as a constant
     lod = Lease(length = 0, downp = 0, puc = 1)
     l1Y = Lease(length = 8760, downp = float(row['Upfront 1YR']), puc = puc1YR) 
     l3Y = Lease(length = 26280, downp = float(row['Upfront 3YR']), puc = puc3YR) 
@@ -38,16 +37,18 @@ def instances(data):
   return ilist
 
 def loadconsumers():
-  ilist = [1000,700,100]
+  ilist = [1000,700,110100]
   slist = [0,0,0]
   return {'work':ilist, 'start_time':slist}
 
 def main():
   ec2 = CSVImport('ec2rates-useast_11-09-12.csv')
   ec2_nopar = CSVImport('ec2rates-useast_11-09-12_nopar.csv')
+  ec2_std = CSVImport('ec2rates-useast_11-09-12_standard.csv')
+  ec2_min = CSVImport('ec2rates-useast_11-09-12_min.csv')
 # def __init__(self, name, instances, consumers):
-  sim1 = Marketplace( name = "basic", \
-      instances = instances(ec2_nopar.data), consumers = loadconsumers())
+#  sim1 = Marketplace( name = "b", instances = instances(ec2.data), consumers = loadconsumers())
+  sim1 = Marketplace_2DRY( name = "b", instances = instances(ec2_min.data), consumers = loadconsumers())
   sim1.start()
   #print sim1.results_inst()
   print sim1.results_cons()
