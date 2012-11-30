@@ -115,22 +115,25 @@ class Consumer(Process):
         rtn['inst'] = inst
     return rtn
 
-  """ purchase resource based on the results of financial analysis """
   def purchase(self, work, instance_list):
     """ shop for the highest cost effectivness """
     rtn = self.optimal_instance(work, instance_list)
     #print self.name," PURCHASED:", rtn['inst'].desc, rtn['cost'],rtn['eff'], rtn['rtime']
-    """ update simulation statistics """
+    """ global statistics """
+    self.bookkeeping(rtn)
+    return rtn
+  
+  def bookkeeping(data):
     self.sim.income += rtn['cost']
-    rtn['inst'].invoked += 1
-    rtn['inst'].income += rtn['cost']
-    rtn['inst'].work +=   rtn['work']
-    rtn['inst'].time +=   rtn['time']
-    rtn['inst'].unused += rtn['rtime']
+    self.sim.books[rtn['inst'].name].invoked += 1
+    self.sim.books[rtn['inst'].name].income += rtn['cost']
+    self.sim.books[rtn['inst'].name].work += rtn['work']
+    self.sim.books[rtn['inst'].name].time += rtn['time']
+    self.sim.books[rtn['inst'].name].rtime += rtn['rtime']
     self.spent += rtn['cost']
     self.rtime += rtn['rtime']
     self.rmdr = rtn['rmdr']
-    return rtn
+
 
   """ process work by purchasing instances """
   def process(self):
@@ -153,13 +156,18 @@ class Marketplace(Simulation):
     Simulation.__init__(self)
     self.name = name
     self.instances = instances 
+    self.books = {}
     self.consumer_specs = consumers
     self.consumer_count = len(consumers['work'])
     self.maxtime = maxtime
     self.consumers = []
     self.income = 0
     self.finished = 0 # jobs completed 
-
+    """ populate our record books """
+    empty_book = {'invoked':0,'income':0,'time':0,'rtime':0,'work':0}
+    for inst in instances:
+      self.books[inst.name] = empty_book
+    
   def spawn_consumers(self, specs):
     """ spawn and activate consumers for simulation """
     for i in range(len(specs['work'])):

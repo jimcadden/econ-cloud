@@ -16,12 +16,14 @@ import math
 import random
 from CloudMarketplace import *
 
-class Consumer_2DRY(Consumer):
+class Consumer_2DRY(Consumer, Process):
   """ a basic consumer motivated by overall cost """
   def __init__(self, name, work, start, sim):
     Consumer.__init__(self, name, work, start, sim)
     self.posted = 0
     self.sold = 0
+    self.marked = 0 # resale purchase marker
+    self.recent = {}
 
   def analyize_resale_value(self, data, inst, instance_list):
     """ evaluate market competition, return a price that undersells the
@@ -63,38 +65,53 @@ class Consumer_2DRY(Consumer):
         rtn['inst'] = inst #FIXME: verify this does notmodify buffer 
     #end for
     return rtn
-    
+  
+  def pull_listing(self, instance_list):
+    """ query the secondary listing for an id """
+    result = []
+    for inst in instance_list:
+        if inst.name == self.marked:
+          result.append(inst)
+    return result
+
+  def bookkeeping_2DRY(self, rtn):
+    return 0
+
   def purchase(self, work, instance_list):
+    print "WE HAR HERE!"
     """ purchase resource based on effiency analysis """
+    self.marked = 0 # clear resale marker
     primary = self.optimal_instance(work, instance_list)
-    # FIXME: strategy does not buy secondary to resell, but should
     secondary = Consumer.optimal_instance(self, work, 
         self.sim.resale_list.theBuffer)
-    
-    """ update simulation statistics """
-    self.sim.income += rtn['cost']
-    #rtn['inst'].invoked += 1
-    #rtn['inst'].income += rtn['cost']
-    #rtn['inst'].work +=   rtn['work']
-    #rtn['inst'].time +=   rtn['time']
-    #rtn['inst'].unused += rtn['rtime']
-    self.spent += rtn['cost']
-    self.rtime += rtn['rtime']
-    self.rmdr = rtn['rmdr']
-    return rtn
+    # FIXME: strategy does not buy secondary to resell, but should
+    if secondary['eff'] > primary['eff']:
+      """ purchase from secondary """ 
+      yield get, self, self.sim.resale_list, self.pull_listing  
+      self.recent = secondary
+      self.recent['inst'] = self.got
+      """ secondary market stats """
+      self.sim.resale_total += self.recent['lease'].downp
+    else:
+      """ primary market stats """
+      Consumer.bookkeeping(self, rtn) 
+      self.recent = primary['inst']
 
-  """ process work by purchasing instances """
   def process(self):
+    """ process work by purchasing instances """
     while self.rmdr > 0:
-      data = self.purchase(self.rmdr, self.sim.instances)
-      yield hold, self, data['time']
+      self.purchase(self.rmdr, self.sim.instances)
+      yield hold, self, 100 #self.recent['time']
     # end while
     """ We have leftover allocation we can resell """
     # FIXME: lets set a minimum allowed to resell
     if self.rtime > 0:
-      tosell = Instance( name=self.name, desc=data['inst'].desc,  \
-          unit = Unit(capacity=float(1.00), time=1, cost=0.1), \
-          lease = Lease(length = self.rtime, downp = 100, puc=1)) 
+      data = self.got
+      inst = data['inst']
+      resell = self.analyize_resale_value( data, inst, instance_list)
+      tosell = Instance( name=self.name, desc=inst.desc,  \
+          unit = inst.unit, \
+          lease = Lease(length = self.rtime, downp = resell['price'] , puc=inst.lease.puc)) 
       """ place listing into resale store (SimPY)"""
       yield put, self.sim, self.sim.resale_list,[tosell]
     self.finish = self.sim.now()
