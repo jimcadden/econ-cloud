@@ -49,11 +49,11 @@ class Instance():
     self.desc = desc
     self.unit = unit       # unit classes
     self.lease = lease     # package class
-    self.invoked = 0       # statistics
-    self.income = 0
-    self.work = 0
-    self.time = 0
-    self.unused = 0
+    #self.invoked = 0       # statistics
+    #self.income = 0
+    #self.work = 0
+    #self.time = 0
+    #self.unused = 0
 
   """
   we are given a requested amount of work.  Return the work completed, work
@@ -85,7 +85,7 @@ class Instance():
   
   """ list the data for instance """
   def results(self):
-    return [self.invoked, self.desc, self.unit.capacity, self.unit.time, \
+    return [self.name, self.desc, self.unit.capacity, self.unit.time, \
         self.unit.cost, self.lease.puc, (self.unit.cost * self.lease.puc),\
         self.lease.length, self.lease.downp] 
     
@@ -123,20 +123,25 @@ class Consumer(Process):
     self.bookkeeping(rtn)
     return rtn
   
-  def bookkeeping(data):
+  def bookkeeping(self, data):
+    """ update our simulation stats """
+    rtn = data
+    """ market data """
     self.sim.income += rtn['cost']
-    self.sim.books[rtn['inst'].name].invoked += 1
-    self.sim.books[rtn['inst'].name].income += rtn['cost']
-    self.sim.books[rtn['inst'].name].work += rtn['work']
-    self.sim.books[rtn['inst'].name].time += rtn['time']
-    self.sim.books[rtn['inst'].name].rtime += rtn['rtime']
+    self.sim.income += rtn['cost']
+    """ consumer data """
     self.spent += rtn['cost']
     self.rtime += rtn['rtime']
     self.rmdr = rtn['rmdr']
+    """ instance data """
+    self.sim.books[rtn['inst'].name]['invoked'] += 1
+    self.sim.books[rtn['inst'].name]['income'] += rtn['cost']
+    self.sim.books[rtn['inst'].name]['work'] += rtn['work']
+    self.sim.books[rtn['inst'].name]['time'] += rtn['time']
+    self.sim.books[rtn['inst'].name]['rtime'] += rtn['rtime']
 
-
-  """ process work by purchasing instances """
   def process(self):
+    """ process work by purchasing instances """
     while self.rmdr > 0:
       data = self.purchase(self.rmdr, self.sim.instances)
       yield hold, self, data['time']
@@ -176,15 +181,6 @@ class Marketplace(Simulation):
       self.consumers.append(con)
       self.activate(con, con.process(), at=con.start)
 
-  def start(self):
-    self.initialize()
-    print self.now(), ':', self.name, 'started',self.consumer_count,'consumers'
-    self.spawn_consumers(self.consumer_specs)
-    self.simulate(until=self.maxtime)
-
-  def finish(self):
-    print self.now(), ':', self.name, 'finished.'
-
   def results_primary(self):
     print "Primary Market Stats"
 
@@ -206,4 +202,14 @@ class Marketplace(Simulation):
       return_set['start'].append(i[4])
       return_set['finish'].append(i[5])
     return return_set
+
+  def start(self):
+    self.initialize()
+    print self.now(), ':', self.name, 'started',self.consumer_count,'consumers'
+    self.spawn_consumers(self.consumer_specs)
+    self.simulate(until=self.maxtime)
+
+  def finish(self):
+    print self.now(), ':', self.name, 'finished.'
+
 # fin.

@@ -6,8 +6,7 @@ from CSVUtility import *
 from CloudMarketplace import *
 from CloudSecondary import *
 
-MAX_CONSUMERS = 4
-MAXWORK = 1000
+MAXWORK = 100
 MAXTIME  = 1000000
 
 def instances(data):
@@ -48,7 +47,7 @@ def main():
   ec2_min = CSVImport('ec2rates-useast_11-09-12_min.csv')
 # def __init__(self, name, instances, consumers):
 #  sim1 = Marketplace( name = "b", instances = instances(ec2.data), consumers = loadconsumers())
-  sim1 = Marketplace_2DRY( name = "b", instances = instances(ec2_min.data), consumers = loadconsumers())
+  sim1 = Marketplace( name = "b", instances = instances(ec2_min.data), consumers = loadconsumers())
   sim1.start()
   #print sim1.results_inst()
   print sim1.results_cons()
