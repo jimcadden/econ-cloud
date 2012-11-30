@@ -78,10 +78,10 @@ class Instance():
     cost =  self.lease.downp + (req_units * (self.unit.cost * self.lease.puc))
     time = req_units * self.unit.time
     rate = work / cost
-    cpr = work / cost / time # instance efficency 
-    print ">", self.desc,":",cpr, rtime
+    eff = work / cost / time # instance efficency 
+    #print ">", self.desc,":",eff, rtime
     return {'cost': cost, 'time': time, 'work':work, 'rmdr': rmdr,
-        'rate':rate, 'cpr':cpr, 'rtime':rtime}
+        'rate':rate, 'eff':eff, 'rtime':rtime}
   
   """ list the data for instance """
   def results(self):
@@ -103,13 +103,14 @@ class Consumer(Process):
     self.rtime = 0
 
   """ search list for best cost efficiency, i.e, most work per dollar  """
-  def shop_for_cpr(self, work, instance_list):
-    prev = 0
+  def optimal_instance(self, work, instance_list):
+    rtn = 0
+    peff = 0
     for inst in instance_list: 
       data = inst.analyize(work) # get instance report for data
-      tmp = data['cpr'] 
-      if tmp >= prev or prev == 0:
-        prev = tmp
+      teff = data['eff'] 
+      if teff >= peff or peff == 0:
+        peff = teff
         rtn = data
         rtn['inst'] = inst
     return rtn
@@ -117,8 +118,8 @@ class Consumer(Process):
   """ purchase resource based on the results of financial analysis """
   def purchase(self, work, instance_list):
     """ shop for the highest cost effectivness """
-    rtn = self.shop_for_cpr(work, instance_list)
-    print self.name," PURCHASED:", rtn['inst'].desc, rtn['cost'],rtn['cpr'], rtn['rtime']
+    rtn = self.optimal_instance(work, instance_list)
+    #print self.name," PURCHASED:", rtn['inst'].desc, rtn['cost'],rtn['eff'], rtn['rtime']
     """ update simulation statistics """
     self.sim.income += rtn['cost']
     rtn['inst'].invoked += 1
