@@ -49,19 +49,17 @@ class Instance():
     self.unit = unit       # unit classes
     self.lease = lease     # package class
 
-  def analyize(self, work):
+  def analyize(self, work, prvwork=0, prvtime=0, prvcost=0):
     """
-    we are given a requested amount of work.  For this instance, return the work 
-    completed, work remaining, total cost and efficiency rating
+    Return the amount completed, work remaining, total cost and 
+    efficiency rating for a given amount of work
     """
-    # partial units consumed are billed as a full unit 
-    req_units = math.ceil(work / self.unit.capacity) # requested units
-    max_units = math.floor(self.lease.length / self.unit.time)  
-    rmdr = 0 # remaning work
+    rmdr = 0  # remaning work
     rtime = 0 # remaining time on lease
+    req_units = math.ceil(work / self.unit.capacity) # no partial units
+    max_units = math.floor(self.lease.length / self.unit.time)  
     """ on-demand leases have a zero length """
     if (self.lease.length > 0):
-      """ a fixed lease can processes limited number of units"""
       if (req_units > max_units): #we need more work than lease allows
         req_units = max_units
         rmdr = work - (max_units * self.unit.capacity)
@@ -71,12 +69,15 @@ class Instance():
     #endif
     cost =  self.lease.downp + (req_units * (self.unit.cost * self.lease.puc))
     time = req_units * self.unit.time
-    rate = work / cost
-    eff = work / cost / time # instance efficency 
-    print "|", self.desc,":", cost, eff, rtime
-    return {'cost': cost, 'time': time, 'work':work, 'rmdr': rmdr,
-        'rate':rate, 'eff':eff, 'rtime':rtime}
-  
+    eff  = self.efficiency(work+prvtime, cost+prvcost, time+prvtime) 
+
+    #print "| (w,c,t,rmt,eff)", self.desc,":", work, cost, time, rtime, eff
+    return {'cost':cost, 'time':time, 'work':work, 'rmdr':rmdr, 'eff':eff,
+        'rtime':rtime}
+
+  def efficiency(self, work, cost, time):
+      return work / cost / time
+
   """ list the data for instance """
   def results(self):
     return [self.name, self.desc, self.unit.capacity, self.unit.time, \
@@ -97,23 +98,44 @@ class Consumer(Process):
     self.rtime = 0 # remaing time
     self.spent = 0 # money spent
 
-  def optimal_instance(self, work, instance_list):
-    """ search list for best cost efficiency, i.e, most work per dollar  """
-    rtn = 0
-    peff = 0
-    for inst in instance_list: 
-      data = inst.analyize(work) # get instance report for data
-      teff = data['eff'] 
-      if teff >= peff or peff == 0:
-        peff = teff
-        rtn = data
-        rtn['inst'] = inst
-    return rtn
+  def optimal_instance(self, work, instance_list, prvwork=0, prvcost=0, prvtime=0):
+
+    if work <= 0:
+      print "THIS HAPPENED!@!"
+      return prevwork / prevcost / prevtime
+
+    max_eff = 0
+    for i in instance_list:
+      #print "| loop:,", prvwork
+      data = i.analyize(work) 
+      if data['rmdr'] > 0:
+        #print "@ recusing"
+        data = self.optimal_instance(data['rmdr'], instance_list, data['work']+prvwork,
+            data['cost']+prvcost, data['time']+prvtime)
+      if data['eff'] >= max_eff:
+        """ if we've found a path with a better efficiency """
+        rtn  = data
+        rtn['inst'] = i
+    return data
+
+
+#  def optimal_instance(self, work, instance_list):
+#    """ search list for best cost efficiency, i.e, most work per dollar  """
+#    rtn = 0
+#    peff = 0
+#    for inst in instance_list: 
+#      data = inst.analyize(work) # get instance report for data
+#      teff = data['eff'] 
+#      if teff >= peff or peff == 0:
+#        peff = teff
+#        rtn = data
+#        rtn['inst'] = inst
+#    return rtn
 
   def purchase(self, work, instance_list):
     """ shop for efficiency """
     rtn = self.optimal_instance(work, instance_list)
-    print ">",self.name,"todo",work,"PURCHASED:", rtn['inst'].desc,\
+   # print ">>",self.name,"todo",work,"PURCHASED:", rtn['inst'].desc,\
     rtn['cost'],rtn['eff'], rtn['rtime'], rtn['rmdr']
     return rtn
 
@@ -122,11 +144,12 @@ class Consumer(Process):
     if self.actual <= 0: # just incase
       self.comp = -1
 
-    print ">>>", self.name,":",self.work," actual:",self.actual
+    #print ">>>", self.name,":",self.work," actual:",self.actual
 
     while self.actual != self.comp:
       exp_rem = self.work - self.comp
       act_rem = self.actual - self.comp
+     # print ">>> REMAINDER: exp", exp_rem, "act:", act_rem 
       """ when completed work > expected work 
         We treat actual work as our new 'high' expectation """
       if self.comp >= self.work:
