@@ -14,7 +14,10 @@ Reseller Marketplace (Store?)
 
 import math
 import random
-from CloudMarketplace import *
+try:
+  from CloudMarketplace import *
+except ImportError:
+  None
 
 class Consumer_2DRY(Consumer, Process):
   """ a basic consumer motivated by overall cost """

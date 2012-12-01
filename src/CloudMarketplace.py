@@ -35,31 +35,25 @@ class Unit():
     self.cost  = cost         # base (on-demand) cost of unit 
 
 class Lease():
-  """ lease duration and costs """
-  """ on-demand instances have a zero length and down payment """
   def __init__(self, length, downp, puc):
+    """ lease duration and costs """
     self.length = length  # required length (0 = no limit)
     self.downp = downp    # down payment
     self.puc = puc        # percentage unit cost
 
 class Instance(): 
-  """ an compute instance """
   def __init__(self, name, desc, unit, lease):
+    """ an compute instance """
     self.name = name
     self.desc = desc
     self.unit = unit       # unit classes
     self.lease = lease     # package class
-    #self.invoked = 0       # statistics
-    #self.income = 0
-    #self.work = 0
-    #self.time = 0
-    #self.unused = 0
 
-  """
-  we are given a requested amount of work.  Return the work completed, work
-  remaining, total cost and efficiency for this instance 
-  """
   def analyize(self, work):
+    """
+    we are given a requested amount of work.  For this instance, return the work 
+    completed, work remaining, total cost and efficiency rating
+    """
     # partial units consumed are billed as a full unit 
     req_units = math.ceil(work / self.unit.capacity) # requested units
     max_units = math.floor(self.lease.length / self.unit.time)  
@@ -79,7 +73,7 @@ class Instance():
     time = req_units * self.unit.time
     rate = work / cost
     eff = work / cost / time # instance efficency 
-    #print ">", self.desc,":",eff, rtime
+    print "|", self.desc,":", cost, eff, rtime
     return {'cost': cost, 'time': time, 'work':work, 'rmdr': rmdr,
         'rate':rate, 'eff':eff, 'rtime':rtime}
   
@@ -92,18 +86,19 @@ class Instance():
 ## actors  ########################################################### 
 
 class Consumer(Process):
-  """ a basic consumer motivated by overall cost """
-  def __init__(self, name, work, start, sim):
+  def __init__(self, name, work, start, actual, sim):
+    """ a basic consumer motivated by overall cost """
     Process.__init__(self, name=name, sim=sim)
     self.work =  work
-    self.rmdr =  work
+    self.actual = actual
     self.start = start
-    self.spent = 0
     self.finish = 0
-    self.rtime = 0
+    self.comp = 0 # completed work
+    self.rtime = 0 # remaing time
+    self.spent = 0 # money spent
 
-  """ search list for best cost efficiency, i.e, most work per dollar  """
   def optimal_instance(self, work, instance_list):
+    """ search list for best cost efficiency, i.e, most work per dollar  """
     rtn = 0
     peff = 0
     for inst in instance_list: 
@@ -116,23 +111,48 @@ class Consumer(Process):
     return rtn
 
   def purchase(self, work, instance_list):
-    """ shop for the highest cost effectivness """
+    """ shop for efficiency """
     rtn = self.optimal_instance(work, instance_list)
-    #print self.name," PURCHASED:", rtn['inst'].desc, rtn['cost'],rtn['eff'], rtn['rtime']
-    """ global statistics """
-    self.bookkeeping(rtn)
+    print ">",self.name,"todo",work,"PURCHASED:", rtn['inst'].desc,\
+    rtn['cost'],rtn['eff'], rtn['rtime'], rtn['rmdr']
     return rtn
-  
+
+  def process(self):
+    """ process work by purchasing instances """
+    if self.actual <= 0: # just incase
+      self.comp = -1
+
+    print ">>>", self.name,":",self.work," actual:",self.actual
+
+    while self.actual != self.comp:
+      exp_rem = self.work - self.comp
+      act_rem = self.actual - self.comp
+      """ when completed work > expected work 
+        We treat actual work as our new 'high' expectation """
+      if self.comp >= self.work:
+        exp_rem = act_rem
+      """ make purchase of instance """
+      data = self.purchase(exp_rem, self.sim.instances)
+      """ unexpected end to job """
+      if data['work'] > act_rem: 
+        instance = data['inst']
+        data = instance.analyize(act_rem)
+        data['inst'] = instance
+      self.bookkeeping(data)
+      yield hold, self, data['time']
+      #end while
+    self.finish = self.sim.now()
+
   def bookkeeping(self, data):
     """ update our simulation stats """
     rtn = data
+    """ consumer data """
+    self.rmdr = rtn['rmdr']
+    self.spent += rtn['cost']
+    self.comp += rtn['work']
+    self.rtime = rtn['rtime']
     """ market data """
     self.sim.income += rtn['cost']
-    self.sim.income += rtn['cost']
-    """ consumer data """
-    self.spent += rtn['cost']
-    self.rtime += rtn['rtime']
-    self.rmdr = rtn['rmdr']
     """ instance data """
     self.sim.books[rtn['inst'].name]['invoked'] += 1
     self.sim.books[rtn['inst'].name]['income'] += rtn['cost']
@@ -140,17 +160,10 @@ class Consumer(Process):
     self.sim.books[rtn['inst'].name]['time'] += rtn['time']
     self.sim.books[rtn['inst'].name]['rtime'] += rtn['rtime']
 
-  def process(self):
-    """ process work by purchasing instances """
-    while self.rmdr > 0:
-      data = self.purchase(self.rmdr, self.sim.instances)
-      yield hold, self, data['time']
-    self.finish = self.sim.now()
-
   def results(self):
     """ return consumer data list """
     time = self.finish - self.start # total time
-    return [self.name, self.work, self.spent, time, self.start, self.finish,
+    return [self.name, self.work, self.actual, self.comp, self.spent, time, self.start, self.finish,
         self.rtime] 
 
 
@@ -173,11 +186,18 @@ class Marketplace(Simulation):
     for inst in instances:
       self.books[inst.name] = empty_book
     
+ # def ondemand_instance(self, instance_list):
+ #   result = []
+ #   for i in instance_list:
+ #     if i.lease.downp == 0
+ #       result.append(i)
+ #   return result
+  
   def spawn_consumers(self, specs):
     """ spawn and activate consumers for simulation """
     for i in range(len(specs['work'])):
       con = Consumer(name="con_%s"%i, work=specs['work'][i], \
-          start=specs['start_time'][i], sim=self)
+          start=specs['start_time'][i], actual=specs['actual'][i], sim=self)
       self.consumers.append(con)
       self.activate(con, con.process(), at=con.start)
 
@@ -192,15 +212,18 @@ class Marketplace(Simulation):
 
   def results_cons(self):
     return_set = {'name':[],'work':[],'cost':[], 'time':[],
-        'start':[],'finish':[]}
+        'start':[],'finish':[], 'comp':[], 'rtime':[], 'actual':[]}
     for cons in self.consumers:
       i = cons.results()
       return_set['name'].append(i[0])
       return_set['work'].append(i[1])
-      return_set['cost'].append(i[2])
-      return_set['time'].append(i[3])
-      return_set['start'].append(i[4])
-      return_set['finish'].append(i[5])
+      return_set['actual'].append(i[2])
+      return_set['comp'].append(i[3])
+      return_set['cost'].append(i[4])
+      return_set['time'].append(i[5])
+      return_set['start'].append(i[6])
+      return_set['finish'].append(i[7])
+      return_set['rtime'].append(i[8])
     return return_set
 
   def start(self):

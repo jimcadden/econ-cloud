@@ -37,8 +37,9 @@ def instances(data):
 
 def loadconsumers():
   ilist = [1000,700,50000, 9999]
+  alist = [100,700,40000, 7999]
   slist = [0,0,0,0]
-  return {'work':ilist, 'start_time':slist}
+  return {'work':ilist, 'start_time':slist, 'actual':alist}
 
 def main():
   ec2 = CSVImport('ec2rates-useast_11-09-12.csv')
@@ -49,8 +50,8 @@ def main():
 #  sim1 = Marketplace( name = "b", instances = instances(ec2.data), consumers = loadconsumers())
   sim1 = Marketplace( name = "b", instances = instances(ec2_min.data), consumers = loadconsumers())
   sim1.start()
-  #print sim1.results_inst()
-  print sim1.results_cons()
+  print "CONSUMER RESULTS:\n",sim1.results_cons()
+  print "INSTANCE RESULTS:\n",sim1.results_inst()
   sim1.finish()
 
 # standard boilerplate
