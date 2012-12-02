@@ -98,25 +98,40 @@ class Consumer(Process):
     self.rtime = 0 # remaing time
     self.spent = 0 # money spent
 
-  def optimal_instance(self, work, instance_list, prvwork=0, prvcost=0, prvtime=0):
+  def optimal_instance(self, work, instance_list, prvwork=0, prvcost=0,
+      prvtime=0, depth=0):
 
     if work <= 0:
-      print "THIS HAPPENED!@!"
-      return prevwork / prevcost / prevtime
+      print "SHIT THIS HAPPENED!@!"
+      return prvork / prvcost / prvtime
+
 
     max_eff = 0
     for i in instance_list:
       #print "| loop:,", prvwork
       data = i.analyize(work) 
-      if data['rmdr'] > 0:
-        #print "@ recusing"
-        data = self.optimal_instance(data['rmdr'], instance_list, data['work']+prvwork,
-            data['cost']+prvcost, data['time']+prvtime)
+      if depth < 2:
+
+        if data['rmdr'] > 0:
+          """ check the hash for best data """
+          try:
+          #  print "@ grabbed from cache"
+            data = self.sim.cache[data['rmdr']]
+          except KeyError:
+           # print "@",depth,"recusing"
+            last_rmdr = data['rmdr']
+            data = self.optimal_instance(data['rmdr'], instance_list, data['work']+prvwork,
+                data['cost']+prvcost, data['time']+prvtime, depth+1)
+            """ check the hash for best data """
+            self.sim.cache[last_rmdr] = data
+
       if data['eff'] >= max_eff:
         """ if we've found a path with a better efficiency """
         rtn  = data
         rtn['inst'] = i
-    return data
+
+    
+    return rtn
 
 
 #  def optimal_instance(self, work, instance_list):
@@ -135,7 +150,7 @@ class Consumer(Process):
   def purchase(self, work, instance_list):
     """ shop for efficiency """
     rtn = self.optimal_instance(work, instance_list)
-   # print ">>",self.name,"todo",work,"PURCHASED:", rtn['inst'].desc,\
+    #print ">>",self.name,"todo",work,"PURCHASED:", rtn['inst'].desc,\
     rtn['cost'],rtn['eff'], rtn['rtime'], rtn['rmdr']
     return rtn
 
@@ -144,7 +159,7 @@ class Consumer(Process):
     if self.actual <= 0: # just incase
       self.comp = -1
 
-    #print ">>>", self.name,":",self.work," actual:",self.actual
+   # print ">>>", self.name,":",self.work," actual:",self.actual
 
     while self.actual != self.comp:
       exp_rem = self.work - self.comp
@@ -204,8 +219,10 @@ class Marketplace(Simulation):
     self.consumers = []
     self.income = 0
     self.finished = 0 # jobs completed 
+    cache = {}
     """ populate our record books """
     empty_book = {'invoked':0,'income':0,'time':0,'rtime':0,'work':0}
+
     for inst in instances:
       self.books[inst.name] = empty_book
     
