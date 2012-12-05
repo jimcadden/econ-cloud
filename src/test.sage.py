@@ -68,24 +68,43 @@ def loadconsumers(group, count=10, X=RealDistribution('uniform',[0,1]), Z=RealDi
       count += 1
   return {'group':group,'start_time':time, 'work':work, 'actual':actu}
 
+def con_result_print(group, res):
+  print "\n\nRESULTRS FOR GROUP", group
+  print "Work"
+  print "Actual / Expected", (mean(res['actual']) /
+      mean(res['work'])*100),"%"
+  print "Mean (expected)", mean(res['work'])
+  print "Median (expected)", median(res['work'])
+  print "Mean (actual)", mean(res['actual'])
+  print "Median (actual)", median(res['actual'])
+  print "Rate (actual)", (mean(res['actual']) / mean(res['time']))
+  print "Cost"
+  print "Mean", mean(res['cost'])
+  print "Median", median(res['cost'])
+  print "Time"
+  print "Mean", mean(res['time'])
+  print "Median", median(res['time'])
+  print "Remaing Time", sum(res['rtime'])
 
-MAXWORK = 10000
-MAXTIME = 1000000000
-CONS = 1
+
+MAXWORK = 100000
+MAXTIME = 1000000
+CONS = 400
 
 
 ec2_insts = instances(ec2.data)
 ec2_insts_np = instances(ec2_nopar.data)
 ec2_insts_std = instances(ec2_std.data)
 
-bsim1_conspecs = loadconsumers(group=1, count=CONS, X=RealDistribution('lognormal', [0, .75]))
+bsim1_conspecs = loadconsumers(group=1, count=CONS,
+    X=RealDistribution('lognormal', [0, .75]))
 bsim2_conspecs = loadconsumers(group=2, count=CONS, X=RealDistribution('lognormal', [0, .45]))
-bsim3_conspecs = loadconsumers(group=2, count=CONS, X=RealDistribution('lognormal', [0, .25]))
+bsim3_conspecs = loadconsumers(group=3, count=CONS, X=RealDistribution('lognormal', [0, .25]))
 
-bsim_fullconspec = {}
-bsim_fullconspec['work'] = bsim1_conspecs['work'] + bsim2_conspecs['work'] + bsim3_conspecs['work']
-bsim_fullconspec['start_time'] = bsim1_conspecs['start_time'] + bsim2_conspecs['start_time'] + bsim3_conspecs['start_time']
-bsim_fullconspec['actual'] = bsim1_conspecs['actual'] + bsim2_conspecs['actual'] + bsim3_conspecs['actual']
+#bsim_fullconspec = {}
+#bsim_fullconspec['work'] = bsim1_conspecs['work'] + bsim2_conspecs['work'] + bsim3_conspecs['work']
+#bsim_fullconspec['start_time'] = bsim1_conspecs['start_time'] + bsim2_conspecs['start_time'] + bsim3_conspecs['start_time']
+#bsim_fullconspec['actual'] = bsim1_conspecs['actual'] + bsim2_conspecs['actual'] + bsim3_conspecs['actual']
 
 #bsim1 = Marketplace_2DRY( name = "EC2: group 1", instances = ec2_insts, consumers = bsim1_conspecs)
 #bsim2 = Marketplace_2DRY( name = "EC2: group 2", instances = ec2_insts, consumers = bsim2_conspecs)
@@ -93,52 +112,22 @@ bsim_fullconspec['actual'] = bsim1_conspecs['actual'] + bsim2_conspecs['actual']
 bsim1 = Marketplace( name = "EC2: group 1", instances = ec2_insts_np, consumers = bsim1_conspecs)
 bsim2 = Marketplace( name = "EC2: group 2", instances = ec2_insts_np, consumers = bsim2_conspecs)
 bsim3 = Marketplace( name = "EC2: group 3", instances = ec2_insts_np, consumers = bsim3_conspecs)
+
 bsim1.start()
 bsim2.start()
 bsim3.start()
+
 bsim1_res_i =  bsim1.results_inst()
 bsim1_res_c =  bsim1.results_cons()
 bsim2_res_i =  bsim2.results_inst()
 bsim2_res_c =  bsim2.results_cons()
 bsim3_res_i =  bsim3.results_inst()
 bsim3_res_c =  bsim3.results_cons()
+
 bsim1.finish()
+con_result_print("A", bsim1_res_c)
 bsim2.finish()
+con_result_print("B", bsim2_res_c)
 bsim3.finish()
+con_result_print("C", bsim3_res_c)
 
-print "\nGROUP A"
-print "Work"
-print "Mean", mean(bsim1_res_c['work'])
-print "Median", median(bsim1_res_c['work'])
-print "Rate", (mean(bsim1_res_c['work']) / mean(bsim1_res_c['time']))
-print "Cost"
-print "Mean", mean(bsim1_res_c['cost'])
-print "Median", median(bsim1_res_c['cost'])
-print "Time"
-print "Mean", mean(bsim1_res_c['time'])
-print "Median", median(bsim1_res_c['time'])
-
-
-print "\nGROUP B"
-print "Work"
-print "Mean", mean(bsim2_res_c['work'])
-print "Median", median(bsim2_res_c['work'])
-print "Rate", (mean(bsim2_res_c['work']) / mean(bsim2_res_c['time']))
-print "Cost"
-print "Mean", mean(bsim2_res_c['cost'])
-print "Median", median(bsim2_res_c['cost'])
-print "Time"
-print "Mean", mean(bsim2_res_c['time'])
-print "Median", median(bsim2_res_c['time'])
-
-print "\nGROUP C"
-print "ork"
-print "Mean", mean(bsim3_res_c['work'])
-print "Median", median(bsim3_res_c['work'])
-print "Rate", (mean(bsim3_res_c['work']) / mean(bsim3_res_c['time']))
-print "Cost"
-print "Mean", mean(bsim3_res_c['cost'])
-print "Median", median(bsim3_res_c['cost'])
-print "Time"
-print "Mean", mean(bsim3_res_c['time'])
-print "Median", median(bsim3_res_c['time'])

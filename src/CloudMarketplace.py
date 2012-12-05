@@ -1,29 +1,19 @@
 """ This is a basic simulation of consumer-producer market model using the
 SimPY library. """
-
 '''
-
 TODO:
  * consider a consumer motivated by time, or deadline (optional?) 
    * this requires the incorporation of a consumer deadline and different
    * clearly, a minimal time chooses machine with most capacity
- * consider consumer utilization % (assumer 100% now)
- * Monitoring / Data collection on consumers, resources
-   - total money spent
-   - total work done
-   - income to provider
-   - average job cost
-   - average job length
-   - average price per unit
-
  * wrap your head about how simulation steps relate to time.
    - a simulation step can represent anything: secs -> mins -> hours
    - time-per-step ratio should be global
    - time-per-step must be <= min unit time
-
 '''
 import math
 from SimPy.Simulation import *
+
+DEBUG = 0
 
 # Props ##################################################################### 
 
@@ -71,7 +61,7 @@ class Instance():
     time = req_units * self.unit.time
     eff  = self.efficiency(work+prvtime, cost+prvcost, time+prvtime) 
 
-    #print "| (w,c,t,rmt,eff)", self.desc,":", work, cost, time, rtime, eff
+    if DEBUG: print "|w,rw,c,t,rm,ef", self.desc,":", work,rmdr, cost, time, rtime, eff
     return {'cost':cost, 'time':time, 'work':work, 'rmdr':rmdr, 'eff':eff,
         'rtime':rtime}
 
@@ -93,6 +83,7 @@ class Consumer(Process):
     self.work =  work
     self.actual = actual
     self.start = start
+    self.purchases = []
     self.finish = 0
     self.comp = 0 # completed work
     self.rtime = 0 # remaing time
@@ -102,37 +93,38 @@ class Consumer(Process):
       prvtime=0, depth=0):
 
     if work <= 0:
-      print "SHIT THIS HAPPENED!@!"
-      return prvork / prvcost / prvtime
-
+      if DEBUG: print "SHIT THIS HAPPENED!@!"
+      return prvwork / prvcost / prvtime
 
     max_eff = 0
+    inst = 0
     for i in instance_list:
-      #print "| loop:,", prvwork
+      if DEBUG: print "| loop:,", prvwork
       data = i.analyize(work) 
       if depth < 2:
-
         if data['rmdr'] > 0:
+          if DEBUG: print "++ DEPTH",depth,", RMDR",data['rmdr'],"++"
           """ check the hash for best data """
           try:
-          #  print "@ grabbed from cache"
-            data = self.sim.cache[data['rmdr']]
+            data = self.sim.cache[data['work']*self.sim.cache_bucket(work)]
+            if DEBUG: print "@ cache HIT:", self.sim.cache_bucket(work),"round",data['work']
           except KeyError:
-           # print "@",depth,"recusing"
-            last_rmdr = data['rmdr']
+            if DEBUG: print "@ cache miss:",self.sim.cache_bucket(work),"round",data['work']
             data = self.optimal_instance(data['rmdr'], instance_list, data['work']+prvwork,
                 data['cost']+prvcost, data['time']+prvtime, depth+1)
             """ check the hash for best data """
-            self.sim.cache[last_rmdr] = data
+            self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
 
       if data['eff'] >= max_eff:
+        if DEBUG: "D:",depth,"MAX EFF UPDATED:",i.desc, data['eff']
         """ if we've found a path with a better efficiency """
-        rtn  = data
-        rtn['inst'] = i
+        max_eff = data['eff']
+        best_inst  = i
 
-    
+    """ get a fresh results """ 
+    rtn = best_inst.analyize(work)
+    rtn['inst'] = best_inst
     return rtn
-
 
 #  def optimal_instance(self, work, instance_list):
 #    """ search list for best cost efficiency, i.e, most work per dollar  """
@@ -150,36 +142,45 @@ class Consumer(Process):
   def purchase(self, work, instance_list):
     """ shop for efficiency """
     rtn = self.optimal_instance(work, instance_list)
-    #print ">>",self.name,"todo",work,"PURCHASED:", rtn['inst'].desc,\
-    rtn['cost'],rtn['eff'], rtn['rtime'], rtn['rmdr']
+    self.purchases.append(rtn['inst'].name)
+
+    if DEBUG:
+      print ">>",self.name,"todo",work,"PURCHASED:", rtn['inst'].desc,\
+        rtn['cost'],rtn['eff'], rtn['rtime'], rtn['rmdr']
     return rtn
 
   def process(self):
     """ process work by purchasing instances """
-    if self.actual <= 0: # just incase
+    if self.actual == 0: # shouldnt happen, but just incase
       self.comp = -1
 
-   # print ">>>", self.name,":",self.work," actual:",self.actual
-
-    while self.actual != self.comp:
+    if DEBUG: print ">>>", self.name,"START | exp:",self.work," actual:",self.actual
+    while self.actual > self.comp:
       exp_rem = self.work - self.comp
       act_rem = self.actual - self.comp
-     # print ">>> REMAINDER: exp", exp_rem, "act:", act_rem 
-      """ when completed work > expected work 
+      if DEBUG: print ">>> REMAINDER: exp:", exp_rem, "act:", act_rem, "comp:",self.comp 
+
+      """ Case 1: when completed work > expected work 
         We treat actual work as our new 'high' expectation """
       if self.comp >= self.work:
         exp_rem = act_rem
       """ make purchase of instance """
       data = self.purchase(exp_rem, self.sim.instances)
-      """ unexpected end to job """
+      """ Case 2: Job end unexpectely """
       if data['work'] > act_rem: 
+        if DEBUG: print "job ended unexpectedly"
         instance = data['inst']
         data = instance.analyize(act_rem)
         data['inst'] = instance
-      self.bookkeeping(data)
+      self.bookkeeping(data) #record puchase details
       yield hold, self, data['time']
       #end while
     self.finish = self.sim.now()
+    self.sim.finished += 1
+    if data['rtime'] > 0:
+      self.sim.rtime += data['rtime']
+    if data['rtime'] < 0:
+      print "NEGATIVE RTIME??", data['rtime']
 
   def bookkeeping(self, data):
     """ update our simulation stats """
@@ -201,9 +202,8 @@ class Consumer(Process):
   def results(self):
     """ return consumer data list """
     time = self.finish - self.start # total time
-    return [self.name, self.work, self.actual, self.comp, self.spent, time, self.start, self.finish,
-        self.rtime] 
-
+    return [self.name, self.work, self.actual, self.comp, self.spent, 
+        time, self.start, self.finish, self.rtime, self.purchases] 
 
 ## stage ############################################################# 
 
@@ -216,23 +216,21 @@ class Marketplace(Simulation):
     self.consumer_specs = consumers
     self.consumer_count = len(consumers['work'])
     self.maxtime = maxtime
+    self.maxwork =  max(consumers['work'])
     self.consumers = []
     self.income = 0
     self.finished = 0 # jobs completed 
-    cache = {}
-    """ populate our record books """
+    self.rtime = 0 # unused hours
+    self.cache = {}
     empty_book = {'invoked':0,'income':0,'time':0,'rtime':0,'work':0}
-
+    """ populate our record datastruct """
     for inst in instances:
       self.books[inst.name] = empty_book
     
- # def ondemand_instance(self, instance_list):
- #   result = []
- #   for i in instance_list:
- #     if i.lease.downp == 0
- #       result.append(i)
- #   return result
-  
+  def cache_bucket(self, x, buckets=1000):
+    base = int(self.maxwork / buckets)
+    return int(base * round(float(x)/ base))
+
   def spawn_consumers(self, specs):
     """ spawn and activate consumers for simulation """
     for i in range(len(specs['work'])):
@@ -242,13 +240,24 @@ class Marketplace(Simulation):
       self.activate(con, con.process(), at=con.start)
 
   def results_primary(self):
-    print "Primary Market Stats"
+    rtn = []
+    rtn['consumers'] = self.consumer_count
+    rtn['finished'] = self.finished
+    rtn['income'] = self.income
+    rtn['rtime'] = self.rtime
+    rtn['cache'] = len(self.cache)
+    return rtn
 
   def results_inst(self):
-    return_list = []
+    #empty_book = {'invoked':0,'income':0,'time':0,'rtime':0,'work':0}
+    return_set = {'name':[],'work':[],'income':[], 'time':[],'rtime':[]}
     for inst in self.instances:
-      return_list.append(inst.results())
-    return return_list
+      return_set['name'].append(inst.name)
+      return_set['work'].append(self.books[inst.name]['work'])
+      return_set['income'].append(self.books[inst.name]['income'])
+      return_set['time'].append(self.books[inst.name]['time'])
+      return_set['rtime'].append(self.books[inst.name]['rtime'])
+    return return_set
 
   def results_cons(self):
     return_set = {'name':[],'work':[],'cost':[], 'time':[],
@@ -264,6 +273,8 @@ class Marketplace(Simulation):
       return_set['start'].append(i[6])
       return_set['finish'].append(i[7])
       return_set['rtime'].append(i[8])
+      """ for now, lets just print the pruchases"""
+      if DEBUG: print "PURCHASES FOR",cons.name,"(",cons.work,",",cons.actual,"):",cons.purchases
     return return_set
 
   def start(self):
@@ -273,6 +284,7 @@ class Marketplace(Simulation):
     self.simulate(until=self.maxtime)
 
   def finish(self):
-    print self.now(), ':', self.name, 'finished.'
+    print self.name,'finished @',self.now()
+    #self.results_primary()
 
 # fin.
