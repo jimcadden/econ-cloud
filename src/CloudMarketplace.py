@@ -89,11 +89,11 @@ class Consumer(Process):
     self.rtime = 0 # remaing time
     self.spent = 0 # money spent
 
-  def optimal_instance(self, work, instance_list, prvwork=0, prvcost=0,
+  def optimal_instance(self, work, instance_list, rdepth=0, prvwork=0, prvcost=0,
       prvtime=0, depth=0):
 
     if work <= 0:
-      if DEBUG: print "SHIT THIS HAPPENED!@!"
+      if DEBUG: print "shit this happened!@!"
       return prvwork / prvcost / prvtime
 
     max_eff = 0
@@ -101,14 +101,14 @@ class Consumer(Process):
     for i in instance_list:
       if DEBUG: print "| loop:,", prvwork
       data = i.analyize(work) 
-      if depth < 2:
+      if depth < rdepth:
         if data['rmdr'] > 0:
-          if DEBUG: print "++ DEPTH",depth,", RMDR",data['rmdr'],"++"
+          if DEBUG: print "++ depth",depth,", rmdr",data['rmdr'],"++"
           """ check the hash for best data """
           try:
             data = self.sim.cache[data['work']*self.sim.cache_bucket(work)]
-            if DEBUG: print "@ cache HIT:", self.sim.cache_bucket(work),"round",data['work']
-          except KeyError:
+            if DEBUG: print "@ cache hit:", self.sim.cache_bucket(work),"round",data['work']
+          except keyerror:
             if DEBUG: print "@ cache miss:",self.sim.cache_bucket(work),"round",data['work']
             data = self.optimal_instance(data['rmdr'], instance_list, data['work']+prvwork,
                 data['cost']+prvcost, data['time']+prvtime, depth+1)
@@ -116,7 +116,7 @@ class Consumer(Process):
             self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
 
       if data['eff'] >= max_eff:
-        if DEBUG: "D:",depth,"MAX EFF UPDATED:",i.desc, data['eff']
+        if DEBUG: "d:",depth,"max eff updated:",i.desc, data['eff']
         """ if we've found a path with a better efficiency """
         max_eff = data['eff']
         best_inst  = i
@@ -175,12 +175,11 @@ class Consumer(Process):
       self.bookkeeping(data) #record puchase details
       yield hold, self, data['time']
       #end while
-    self.finish = self.sim.now()
-    self.sim.finished += 1
     if data['rtime'] > 0:
       self.sim.rtime += data['rtime']
     if data['rtime'] < 0:
       print "NEGATIVE RTIME??", data['rtime']
+    self.finished()
 
   def bookkeeping(self, data):
     """ update our simulation stats """
@@ -199,6 +198,10 @@ class Consumer(Process):
     self.sim.books[rtn['inst'].name]['time'] += rtn['time']
     self.sim.books[rtn['inst'].name]['rtime'] += rtn['rtime']
 
+  def finished(self):
+    self.finish = self.sim.now()
+    self.sim.finished += 1
+
   def results(self):
     """ return consumer data list """
     time = self.finish - self.start # total time
@@ -208,10 +211,11 @@ class Consumer(Process):
 ## stage ############################################################# 
 
 class Marketplace(Simulation):
-  def __init__(self, name, instances, consumers, maxtime=100000000):
+  def __init__(self, name, instances, consumers, rdepth=2, maxtime=100000000):
     Simulation.__init__(self)
     self.name = name
     self.instances = instances 
+    self.rdepth = rdepth
     self.books = {}
     self.consumer_specs = consumers
     self.consumer_count = len(consumers['work'])
@@ -227,6 +231,16 @@ class Marketplace(Simulation):
     for inst in instances:
       self.books[inst.name] = empty_book
     
+  def start(self):
+    self.initialize()
+    print self.now(), ':', self.name, 'started',self.consumer_count,'consumers'
+    self.spawn_consumers(self.consumer_specs)
+    self.simulate(until=self.maxtime)
+
+  def finish(self):
+    print self.name,'finished @',self.now()
+    #self.results_primary()
+
   def cache_bucket(self, x, buckets=1000):
     base = int(self.maxwork / buckets)
     return int(base * round(float(x)/ base))
@@ -240,7 +254,8 @@ class Marketplace(Simulation):
       self.activate(con, con.process(), at=con.start)
 
   def results_primary(self):
-    rtn = []
+    rtn = {}
+    rtn['name'] = self.name
     rtn['consumers'] = self.consumer_count
     rtn['finished'] = self.finished
     rtn['income'] = self.income
@@ -276,15 +291,5 @@ class Marketplace(Simulation):
       """ for now, lets just print the pruchases"""
       if DEBUG: print "PURCHASES FOR",cons.name,"(",cons.work,",",cons.actual,"):",cons.purchases
     return return_set
-
-  def start(self):
-    self.initialize()
-    print self.now(), ':', self.name, 'started',self.consumer_count,'consumers'
-    self.spawn_consumers(self.consumer_specs)
-    self.simulate(until=self.maxtime)
-
-  def finish(self):
-    print self.name,'finished @',self.now()
-    #self.results_primary()
 
 # fin.

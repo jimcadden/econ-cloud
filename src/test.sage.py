@@ -8,9 +8,18 @@ from CSVUtility import *
 from CloudMarketplace import *
 from CloudSecondary import *
 
-ec2 = CSVImport('/home/jmcadden/workspace/econ-cloud/src/ec2rates-useast_11-09-12.csv')
+ec2_full = CSVImport('/home/jmcadden/workspace/econ-cloud/src/ec2rates-useast_11-09-12.csv')
 ec2_nopar = CSVImport('/home/jmcadden/workspace/econ-cloud/src/ec2rates-useast_11-09-12_nopar.csv')
 ec2_std = CSVImport('/home/jmcadden/workspace/econ-cloud/src/ec2rates-useast_11-09-12_standard.csv')
+
+############################################
+
+MAXWORK = 100000
+MAXTIME = 100000000
+CONS = 10000
+RDEPTH = 0 # recursion depth
+
+############################################
 
 # Instances    
 def instances(data):
@@ -24,7 +33,8 @@ def instances(data):
     lod = Lease(length = 0, downp = 0, puc = 1)
     l1Y = Lease(length = 8760, downp = float(row['Upfront 1YR']), puc = puc1YR) 
     l3Y = Lease(length = 26280, downp = float(row['Upfront 3YR']), puc = puc3YR) 
-    nunit = Unit(capacity = float(row['Compute Units']), time = 1, cost = float(row['Rate On-demand']))
+    nunit = Unit(capacity = float(row['Compute Units']), time = 1, 
+        cost = float(row['Rate On-demand']))
     ilist.append( Instance( name=count, desc=desc+" OD", unit=nunit, lease = lod))
     count += 1
     ilist.append( Instance( name=count, desc=desc+" 1Y", unit=nunit, lease = l1Y))
@@ -33,15 +43,10 @@ def instances(data):
     count += 1
   return ilist
   
-def ugly_inst_print(insts):
-  print "Lever | Instance Size | Utilization | Capacity | Base Rate | Lease Discount (1Y, 3Y) | Downpayment (1Y, 3Y) "
-  for row in insts.data:
-    print row['Level'], "|" ,row['Instance Type'], "|" , row['Utilization'], "|", row['Compute Units'], "| ", row['Rate On-demand'], "| (" , row['Rate 1YR'], ",", row['Rate 3YR'], ") | (", row['Upfront 1YR'],",",row['Upfront 3YR'], ")"
-    
-
 # Consumers
 # X = work-distribution, Y = start time, Z = confidence
-def loadconsumers(group, count=10, X=RealDistribution('uniform',[0,1]), Z=RealDistribution('uniform',[0,1]), Y=RealDistribution('gaussian',0.275)):
+def loadconsumers(group, count=10, X=RealDistribution('uniform',[0,1]), 
+    Z=RealDistribution('uniform',[0,1]), Y=RealDistribution('gaussian',0.275)):
   wtmp = []
   time = []
   actu = []
@@ -68,8 +73,15 @@ def loadconsumers(group, count=10, X=RealDistribution('uniform',[0,1]), Z=RealDi
       count += 1
   return {'group':group,'start_time':time, 'work':work, 'actual':actu}
 
-def con_result_print(group, res):
-  print "\n\nRESULTRS FOR GROUP", group
+
+def ugly_inst_print(insts):
+  print "Lever | Instance Size | Utilization | Capacity | Base Rate | Lease Discount (1Y, 3Y) | Downpayment (1Y, 3Y) "
+  for row in insts.data:
+    print row['Level'], "|" ,row['Instance Type'], "|" , row['Utilization'], "|", row['Compute Units'], "| ", row['Rate On-demand'], "| (" , row['Rate 1YR'], ",", row['Rate 3YR'], ") | (", row['Upfront 1YR'],",",row['Upfront 3YR'], ")"
+    
+
+def con_res_print(res):
+  print "\n\nCONSULTANT RESULTS"
   print "Work"
   print "Actual / Expected", (mean(res['actual']) /
       mean(res['work'])*100),"%"
@@ -86,21 +98,25 @@ def con_result_print(group, res):
   print "Median", median(res['time'])
   print "Remaing Time", sum(res['rtime'])
 
+def ins_res_print(res):
+  None
 
-MAXWORK = 100000
-MAXTIME = 1000000
-CONS = 400
+def sim_res_print(res):
+  print "\n MARKEY RESULTRS FOR", res['name']
+  print "CONSUMERS"
+  print "Started", res['consumers']
+  print "Finished",res['finished']
+  print "Income", res['income']
+  print "Remaing Time", res['rtime']
+  print "Cache", res['cache']
+  
+def sim_print(sim):
+  print "##########################"
+  sim_res_print(sim['mrkt'])
+  ins_res_print(sim['inst'])
+  con_res_print(sim['cons'])
 
-
-ec2_insts = instances(ec2.data)
-ec2_insts_np = instances(ec2_nopar.data)
-ec2_insts_std = instances(ec2_std.data)
-
-bsim1_conspecs = loadconsumers(group=1, count=CONS,
-    X=RealDistribution('lognormal', [0, .75]))
-bsim2_conspecs = loadconsumers(group=2, count=CONS, X=RealDistribution('lognormal', [0, .45]))
-bsim3_conspecs = loadconsumers(group=3, count=CONS, X=RealDistribution('lognormal', [0, .25]))
-
+  
 #bsim_fullconspec = {}
 #bsim_fullconspec['work'] = bsim1_conspecs['work'] + bsim2_conspecs['work'] + bsim3_conspecs['work']
 #bsim_fullconspec['start_time'] = bsim1_conspecs['start_time'] + bsim2_conspecs['start_time'] + bsim3_conspecs['start_time']
@@ -109,25 +125,26 @@ bsim3_conspecs = loadconsumers(group=3, count=CONS, X=RealDistribution('lognorma
 #bsim1 = Marketplace_2DRY( name = "EC2: group 1", instances = ec2_insts, consumers = bsim1_conspecs)
 #bsim2 = Marketplace_2DRY( name = "EC2: group 2", instances = ec2_insts, consumers = bsim2_conspecs)
 #bsim3 = Marketplace_2DRY( name = "EC2: group 3", instances = ec2_insts, consumers = bsim3_conspecs)
-bsim1 = Marketplace( name = "EC2: group 1", instances = ec2_insts_np, consumers = bsim1_conspecs)
-bsim2 = Marketplace( name = "EC2: group 2", instances = ec2_insts_np, consumers = bsim2_conspecs)
-bsim3 = Marketplace( name = "EC2: group 3", instances = ec2_insts_np, consumers = bsim3_conspecs)
 
-bsim1.start()
-bsim2.start()
-bsim3.start()
+ec2 = []
+ec2.append(instances(ec2_full.data))
+ec2.append(instances(ec2_nopar.data))
+ec2.append(instances(ec2_std.data))
 
-bsim1_res_i =  bsim1.results_inst()
-bsim1_res_c =  bsim1.results_cons()
-bsim2_res_i =  bsim2.results_inst()
-bsim2_res_c =  bsim2.results_cons()
-bsim3_res_i =  bsim3.results_inst()
-bsim3_res_c =  bsim3.results_cons()
+def run_3gsim_p(name="Sim", cdist=0.75, count=CONS, iidx=1, poprate=0.12): 
+  conspecs = loadconsumers(group=1, count=CONS,
+      X=RealDistribution('lognormal', [0, poprate]))
+  sim1 = Marketplace_2DRY( name=name, instances=ec2[iidx], consumers = conspecs,
+      rdepth= RDEPTH)
+  sim1.start()
+  rtn = {}
+  rtn['inst'] =  sim1.results_inst()
+  rtn['cons'] =  sim1.results_cons()
+  rtn['mrkt'] =  sim1.results_primary()
+  sim1.finish()
+  return rtn 
 
-bsim1.finish()
-con_result_print("A", bsim1_res_c)
-bsim2.finish()
-con_result_print("B", bsim2_res_c)
-bsim3.finish()
-con_result_print("C", bsim3_res_c)
+###########################
 
+sim1 = run_3gsim_p("Group 1", 0.75, 2)
+sim_print(sim1)
