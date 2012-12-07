@@ -11,12 +11,13 @@ from CloudSecondary import *
 ec2_full = CSVImport('/home/jmcadden/workspace/econ-cloud/src/ec2rates-useast_11-09-12.csv')
 ec2_nopar = CSVImport('/home/jmcadden/workspace/econ-cloud/src/ec2rates-useast_11-09-12_nopar.csv')
 ec2_std = CSVImport('/home/jmcadden/workspace/econ-cloud/src/ec2rates-useast_11-09-12_standard.csv')
+ec2_min = CSVImport('/home/jmcadden/workspace/econ-cloud/src/ec2rates-useast_11-09-12_min.csv')
 
 ############################################
 
 MAXWORK = 100000
 MAXTIME = 100000000
-CONS = 10000
+CONS = 100
 RDEPTH = 0 # recursion depth
 
 ############################################
@@ -130,12 +131,11 @@ ec2 = []
 ec2.append(instances(ec2_full.data))
 ec2.append(instances(ec2_nopar.data))
 ec2.append(instances(ec2_std.data))
+ec2.append(instances(ec2_min.data))
 
-def run_3gsim_p(name="Sim", cdist=0.75, count=CONS, iidx=1, poprate=0.12): 
-  conspecs = loadconsumers(group=1, count=CONS,
-      X=RealDistribution('lognormal', [0, poprate]))
-  sim1 = Marketplace_2DRY( name=name, instances=ec2[iidx], consumers = conspecs,
-      rdepth= RDEPTH)
+def run_3gsim_p(name="Primary Market Test", idx=1, conspecs=0, rdepth=RDEPTH):
+  sim1 = Marketplace( name=name, instances=ec2[idx], consumers = conspecs,
+      rdepth= rdepth)
   sim1.start()
   rtn = {}
   rtn['inst'] =  sim1.results_inst()
@@ -144,7 +144,23 @@ def run_3gsim_p(name="Sim", cdist=0.75, count=CONS, iidx=1, poprate=0.12):
   sim1.finish()
   return rtn 
 
+def run_3gsim_2(name="Secondary Market Test", idx=1, conspecs=0, rdepth=RDEPTH): 
+
+  sim1 = Marketplace_2DRY( name=name, instances=ec2[idx], consumers = conspecs,
+      rdepth= rdepth)
+  sim1.start()
+  rtn = {}
+  rtn['inst'] =  sim1.results_inst()
+  rtn['cons'] =  sim1.results_cons()
+  rtn['mrkt'] =  sim1.results_primary()
+  sim1.finish()
+  return rtn 
 ###########################
 
-sim1 = run_3gsim_p("Group 1", 0.75, 2)
-sim_print(sim1)
+cons = loadconsumers(group=1, count=CONS, X=RealDistribution('lognormal',
+  [0, .50]))
+
+#sim1 = run_3gsim_p("PRIMARY", 2, cons)
+sim2 = run_3gsim_2("SECONDARY", 2, cons, 0)
+#sim_print(sim1)
+#sim_print(sim2)

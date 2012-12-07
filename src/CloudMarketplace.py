@@ -91,26 +91,31 @@ class Consumer(Process):
 
   def optimal_instance(self, work, instance_list, rdepth=0, prvwork=0, prvcost=0,
       prvtime=0, depth=0):
+    """ A recursive search of list instances that considers (depth) steps into
+    the future and returns the best immediate puchase 
+    """
 
     if work <= 0:
       if DEBUG: print "shit this happened!@!"
       return prvwork / prvcost / prvtime
 
-    max_eff = 0
-    inst = 0
+    """
+    Recusive analysis scan of available isntances
+    """
+    max_eff = inst = 0
     for i in instance_list:
-      if DEBUG: print "| loop:,", prvwork
       data = i.analyize(work) 
       if depth < rdepth:
+        """ recusive check of next-purchases """
         if data['rmdr'] > 0:
           if DEBUG: print "++ depth",depth,", rmdr",data['rmdr'],"++"
           """ check the hash for best data """
           try:
             data = self.sim.cache[data['work']*self.sim.cache_bucket(work)]
             if DEBUG: print "@ cache hit:", self.sim.cache_bucket(work),"round",data['work']
-          except keyerror:
+          except KeyError:
             if DEBUG: print "@ cache miss:",self.sim.cache_bucket(work),"round",data['work']
-            data = self.optimal_instance(data['rmdr'], instance_list, data['work']+prvwork,
+            data = self.optimal_instance(data['rmdr'], instance_list,rdepth, data['work']+prvwork,
                 data['cost']+prvcost, data['time']+prvtime, depth+1)
             """ check the hash for best data """
             self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
@@ -141,45 +146,51 @@ class Consumer(Process):
 
   def purchase(self, work, instance_list):
     """ shop for efficiency """
-    rtn = self.optimal_instance(work, instance_list)
+    rtn = self.optimal_instance(work, instance_list, self.sim.rdepth)
     self.purchases.append(rtn['inst'].name)
-
     if DEBUG:
       print ">>",self.name,"todo",work,"PURCHASED:", rtn['inst'].desc,\
         rtn['cost'],rtn['eff'], rtn['rtime'], rtn['rmdr']
     return rtn
 
   def process(self):
-    """ process work by purchasing instances """
-    if self.actual == 0: # shouldnt happen, but just incase
+    """ process work by purchasing instances
+    case 1: overshoot: completed work > expected work. We treat actual work
+       as our new 'high' expectation
+    case 2: undershoot: job end unexpectely 
+    """
+    # shouldnt happen, but just incase
+    if self.actual == 0: 
       self.comp = -1
-
-    if DEBUG: print ">>>", self.name,"START | exp:",self.work," actual:",self.actual
+    if DEBUG: 
+      print ">>>", self.name,"START | exp:",self.work," actual:",self.actual
     while self.actual > self.comp:
-      exp_rem = self.work - self.comp
-      act_rem = self.actual - self.comp
-      if DEBUG: print ">>> REMAINDER: exp:", exp_rem, "act:", act_rem, "comp:",self.comp 
-
-      """ Case 1: when completed work > expected work 
-        We treat actual work as our new 'high' expectation """
-      if self.comp >= self.work:
-        exp_rem = act_rem
-      """ make purchase of instance """
-      data = self.purchase(exp_rem, self.sim.instances)
-      """ Case 2: Job end unexpectely """
-      if data['work'] > act_rem: 
-        if DEBUG: print "job ended unexpectedly"
-        instance = data['inst']
-        data = instance.analyize(act_rem)
-        data['inst'] = instance
+      data = self.process_inner()
       self.bookkeeping(data) #record puchase details
       yield hold, self, data['time']
-      #end while
-    if data['rtime'] > 0:
+    #end while
+    if data['rtime'] > 0: #global remaining time
       self.sim.rtime += data['rtime']
-    if data['rtime'] < 0:
-      print "NEGATIVE RTIME??", data['rtime']
     self.finished()
+
+  def process_inner(self):
+    exp_rem = self.work - self.comp
+    act_rem = self.actual - self.comp
+    if DEBUG: 
+      print ">>> REMAINDER: exp:", exp_rem, "act:", act_rem, "comp:",self.comp 
+    """ Case 1 """
+    if self.comp >= self.work:
+      exp_rem = act_rem
+    """ select our instance to purchase """
+    data = self.purchase(exp_rem, self.sim.instances) # purchase instance 
+    """ Case 2 """
+    if data['work'] > act_rem: 
+      if DEBUG: 
+        print "job ended unexpectedly"
+      instance = data['inst']
+      data = instance.analyize(act_rem)
+      data['inst'] = instance
+    return data
 
   def bookkeeping(self, data):
     """ update our simulation stats """
