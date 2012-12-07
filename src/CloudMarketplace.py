@@ -13,7 +13,7 @@ TODO:
 import math
 from SimPy.Simulation import *
 
-DEBUG = 0
+DEBUG = 1
 
 # Props ##################################################################### 
 
@@ -61,7 +61,10 @@ class Instance():
     time = req_units * self.unit.time
     eff  = self.efficiency(work+prvtime, cost+prvcost, time+prvtime) 
 
-    if DEBUG: print "|w,rw,c,t,rm,ef", self.desc,":", work,rmdr, cost, time, rtime, eff
+    if DEBUG: 
+      print "|@", self.name, self.desc,": w:",work,"cst:",cost,"time:",\
+        time, "rw:",rmdr,"rt:", rtime, "eff:",eff
+
     return {'cost':cost, 'time':time, 'work':work, 'rmdr':rmdr, 'eff':eff,
         'rtime':rtime}
 
@@ -96,36 +99,37 @@ class Consumer(Process):
     """
 
     if work <= 0:
-      if DEBUG: print "shit this happened!@!"
-      return prvwork / prvcost / prvtime
+      if DEBUG: print "!@!! Opt Inst w/ WORK==0 "
+      return 0 #prvwork / prvcost / prvtime
 
     """
     Recusive analysis scan of available isntances
     """
     max_eff = inst = 0
+    if DEBUG: print "+= optimal instance of w:",work," | depth:",depth
     for i in instance_list:
       data = i.analyize(work) 
       if depth < rdepth:
         """ recusive check of next-purchases """
         if data['rmdr'] > 0:
-          if DEBUG: print "++ depth",depth,", rmdr",data['rmdr'],"++"
+          if DEBUG: print "++", i.name,"| depth",depth,", rmdr",data['rmdr']
           """ check the hash for best data """
           try:
             data = self.sim.cache[data['work']*self.sim.cache_bucket(work)]
-            if DEBUG: print "@ cache hit:", self.sim.cache_bucket(work),"round",data['work']
+            if DEBUG: print "++ cache hit:", self.sim.cache_bucket(work),"round",data['work']
           except KeyError:
-            if DEBUG: print "@ cache miss:",self.sim.cache_bucket(work),"round",data['work']
+            if DEBUG: print "++ cache miss:",self.sim.cache_bucket(work),"round",data['work']
             data = self.optimal_instance(data['rmdr'], instance_list,rdepth, data['work']+prvwork,
                 data['cost']+prvcost, data['time']+prvtime, depth+1)
             """ check the hash for best data """
             self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
 
       if data['eff'] >= max_eff:
-        if DEBUG: "d:",depth,"max eff updated:",i.desc, data['eff']
         """ if we've found a path with a better efficiency """
         max_eff = data['eff']
         best_inst  = i
 
+    if DEBUG: "+= best eff:", data['eff'],"int:",best_inst.name," d:",depth
     """ get a fresh results """ 
     rtn = best_inst.analyize(work)
     rtn['inst'] = best_inst
@@ -149,8 +153,10 @@ class Consumer(Process):
     rtn = self.optimal_instance(work, instance_list, self.sim.rdepth)
     self.purchases.append(rtn['inst'].name)
     if DEBUG:
-      print ">>",self.name,"todo",work,"PURCHASED:", rtn['inst'].desc,\
-        rtn['cost'],rtn['eff'], rtn['rtime'], rtn['rmdr']
+      print ">>>",self.name,"PURCHASED ",rtn['inst'].name,rtn['inst'].desc,\
+          "| req:",work,"rec:",rtn['work'], \
+          "cost:",rtn['cost'],"time:",rtn['time'],"eff:",rtn['eff'],\
+          "rtime:",rtn['rtime']
     return rtn
 
   def process(self):
@@ -163,7 +169,8 @@ class Consumer(Process):
     if self.actual == 0: 
       self.comp = -1
     if DEBUG: 
-      print ">>>", self.name,"START | exp:",self.work," actual:",self.actual
+      print "\n\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+      print ">>>", self.name," begin | exp:",self.work," act:",self.actual
     while self.actual > self.comp:
       data = self.process_inner()
       self.bookkeeping(data) #record puchase details
@@ -174,19 +181,22 @@ class Consumer(Process):
     self.finished()
 
   def process_inner(self):
+    """ the process logic, pulled out to be called from inherited classes"""
     exp_rem = self.work - self.comp
     act_rem = self.actual - self.comp
     if DEBUG: 
-      print ">>> REMAINDER: exp:", exp_rem, "act:", act_rem, "comp:",self.comp 
+      print ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+      print ">>", self.name," step | compl:",self.comp,"exp-rem:", exp_rem, "act-rem:", act_rem
+    # FIXME: been seeing some negative expected remaning values...
     """ Case 1 """
     if self.comp >= self.work:
       exp_rem = act_rem
     """ select our instance to purchase """
-    data = self.purchase(exp_rem, self.sim.instances) # purchase instance 
+    data = self.purchase(exp_rem, self.sim.instances) 
     """ Case 2 """
     if data['work'] > act_rem: 
       if DEBUG: 
-        print "job ended unexpectedly"
+        print ">>", self.name,"| job ended unexpectedly!"
       instance = data['inst']
       data = instance.analyize(act_rem)
       data['inst'] = instance
