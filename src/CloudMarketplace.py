@@ -13,7 +13,7 @@ TODO:
 import math
 from SimPy.Simulation import *
 
-DEBUG = 1
+DEBUG = 0
 
 # Props ##################################################################### 
 
@@ -59,7 +59,7 @@ class Instance():
     #endif
     cost =  self.lease.downp + (req_units * (self.unit.cost * self.lease.puc))
     time = req_units * self.unit.time
-    eff  = self.efficiency(work+prvtime, cost+prvcost, time+prvtime) 
+    eff  = self.efficiency(work+prvwork, cost+prvcost, time+prvtime) 
 
     if DEBUG: 
       print "|@", self.name, self.desc,": w:",work,"cst:",cost,"time:",\
@@ -122,7 +122,7 @@ class Consumer(Process):
             data = self.optimal_instance(data['rmdr'], instance_list,rdepth, data['work']+prvwork,
                 data['cost']+prvcost, data['time']+prvtime, depth+1)
             """ check the hash for best data """
-            self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
+            #self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
 
       if data['eff'] >= max_eff:
         """ if we've found a path with a better efficiency """
@@ -247,11 +247,9 @@ class Marketplace(Simulation):
     self.finished = 0 # jobs completed 
     self.rtime = 0 # unused hours
     self.cache = {}
-    empty_book = {'invoked':0,'income':0,'time':0,'rtime':0,'work':0}
     """ populate our record datastruct """
     for inst in instances:
-      self.books[inst.name] = empty_book
-    
+      self.books[inst.name] = {'invoked':0,'income':0,'time':0,'rtime':0,'work':0}
   def start(self):
     self.initialize()
     print self.now(), ':', self.name, 'started',self.consumer_count,'consumers'
@@ -260,7 +258,6 @@ class Marketplace(Simulation):
 
   def finish(self):
     print self.name,'finished @',self.now()
-    #self.results_primary()
 
   def cache_bucket(self, x, buckets=1000):
     base = int(self.maxwork / buckets)
@@ -274,7 +271,14 @@ class Marketplace(Simulation):
       self.consumers.append(con)
       self.activate(con, con.process(), at=con.start)
 
-  def results_primary(self):
+  def results(self):
+    rtn = {}
+    rtn['mrkt'] = self.results_mrkt()
+    rtn['inst'] = self.results_inst()
+    rtn['cons'] = self.results_cons()
+    return rtn
+
+  def results_mrkt(self):
     rtn = {}
     rtn['name'] = self.name
     rtn['consumers'] = self.consumer_count
@@ -286,11 +290,13 @@ class Marketplace(Simulation):
 
   def results_inst(self):
     #empty_book = {'invoked':0,'income':0,'time':0,'rtime':0,'work':0}
-    return_set = {'name':[],'work':[],'income':[], 'time':[],'rtime':[]}
+    return_set = {'name':[],'invoked':[],'work':[],'income':[], 'time':[],'rtime':[], 'desc':[]}
     for inst in self.instances:
       return_set['name'].append(inst.name)
+      return_set['desc'].append(inst.desc)
       return_set['work'].append(self.books[inst.name]['work'])
       return_set['income'].append(self.books[inst.name]['income'])
+      return_set['invoked'].append(self.books[inst.name]['invoked'])
       return_set['time'].append(self.books[inst.name]['time'])
       return_set['rtime'].append(self.books[inst.name]['rtime'])
     return return_set

@@ -35,9 +35,9 @@ def instances(data):
   return ilist
 
 def loadconsumers():
-  ilist = [100000,100000,10000,50]
-  alist = [100000,100000,10000,50]
-  slist = [0,0,0,0]
+  ilist = [26280]#[100000,100000,10000,50]
+  alist = [8760]#[100000,100000,10000,50]
+  slist = [0]#[0,0,0,0]
   return {'work':ilist, 'start_time':slist, 'actual':alist}
 
 def main():

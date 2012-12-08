@@ -17,8 +17,8 @@ ec2_min = CSVImport('/home/jmcadden/workspace/econ-cloud/src/ec2rates-useast_11-
 
 MAXWORK = 100000
 MAXTIME = 100000000
-CONS = 100
-RDEPTH = 0 # recursion depth
+CONS = 10
+RDEPTH = 2 # recursion depth
 
 ############################################
 
@@ -82,42 +82,91 @@ def ugly_inst_print(insts):
     
 
 def con_res_print(res):
-  print "\n\nCONSULTANT RESULTS"
-  print "Work"
-  print "Actual / Expected", (mean(res['actual']) /
-      mean(res['work'])*100),"%"
-  print "Mean (expected)", mean(res['work'])
-  print "Median (expected)", median(res['work'])
-  print "Mean (actual)", mean(res['actual'])
-  print "Median (actual)", median(res['actual'])
-  print "Rate (actual)", (mean(res['actual']) / mean(res['time']))
-  print "Cost"
-  print "Mean", mean(res['cost'])
-  print "Median", median(res['cost'])
-  print "Time"
-  print "Mean", mean(res['time'])
-  print "Median", median(res['time'])
-  print "Remaing Time", sum(res['rtime'])
+  print "WORK"
+  print "act/exp %", (mean(res['actual']) / mean(res['work'])*100),"%"
+  print "mean (exp)", mean(res['work'])
+  print "median (exp)", median(res['work'])
+  print "mean (act)", mean(res['actual'])
+  print "median (act)", median(res['actual'])
+  print "mate (act)", (mean(res['actual']) / mean(res['time']))
+  print "\nCOST"
+  print "mean", mean(res['cost'])
+  print "median", median(res['cost'])
+  print "\nTIME"
+  print "mean", mean(res['time'])
+  print "median", median(res['time'])
+  print "remaing time", sum(res['rtime'])
 
-def ins_res_print(res):
-  None
+def ins_res_print2(rtn):
+  for i in range(len(rtn['name'])):
+     print i,rtn['name'][i],rtn['desc'][i]
+     print "invoked:", rtn['invoked'][i]
+     print "work:", rtn['work'][i]
+     print "income:", rtn['income'][i]
+     print "time:", rtn['time'][i]
+     print "rtime:", rtn['rtime'][i]
+     print "resell:", rtn['resell'][i]
+     print "resold:", rtn['resold'][i]
+     print "-----------------------------"
 
-def sim_res_print(res):
-  print "\n MARKEY RESULTRS FOR", res['name']
-  print "CONSUMERS"
-  print "Started", res['consumers']
-  print "Finished",res['finished']
-  print "Income", res['income']
-  print "Remaing Time", res['rtime']
-  print "Cache", res['cache']
+def ins_res_print(rtn):
+  for i in range(len(rtn['name'])):
+     print i,rtn['name'][i],rtn['desc'][i]
+     print "work:", rtn['work'][i]
+     print "income:", rtn['income'][i]
+     print "time:", rtn['time'][i]
+     print "rtime:", rtn['rtime'][i]
+     print "-----------------------------"
+
+def pmkt_res_print(res):
+  print "started", res['consumers']
+  print "finished",res['finished']
+  print "income", res['income']
+  print "remaing time", res['rtime']
+  print "cache", res['cache']
   
-def sim_print(sim):
-  print "##########################"
-  sim_res_print(sim['mrkt'])
-  ins_res_print(sim['inst'])
+def sdry_res_print(res):
+  print "listed:", res['listed']
+  print "sold:", res['sold']
+  print "unsold:", res['unsold']
+  print "fee:", res['resale_fee']
+  print "income:", res['income_2dry']
+  print "total income:", res['income_2dry'] + res['income']
+
+def sim_print2(sim):
+  print "====================================================================================="
+  print "=== ",sim['mrkt']['name']," RESULTS" 
+  print "====================================================================================="
+  print "\nCONSULTANT"
+  print "-----------------------------------------"
   con_res_print(sim['cons'])
+  print "\nINSTANCES"
+  print "-----------------------------------------"
+  ins_res_print2(sim['inst'])
+  print "\nPRIMARY MARKET"
+  print "-----------------------------------------"
+  pmkt_res_print(sim['mrkt'])
+  print "\nSECONDARY MARKET"
+  print "-----------------------------------------"
+  sdry_res_print(sim['mrkt'])
+  print "\n====================================================================================="
+  print "====================================================================================="
 
-  
+def sim_print(sim):
+  print "====================================================================================="
+  print "=== ",sim['mrkt']['name']," RESULTS" 
+  print "====================================================================================="
+  print "\nCONSULTANT"
+  print "-----------------------------------------"
+  con_res_print(sim['cons'])
+  print "\nINSTANCES"
+  print "-----------------------------------------"
+  ins_res_print(sim['inst'])
+  print "\nPRIMARY MARKET"
+  print "-----------------------------------------"
+  pmkt_res_print(sim['mrkt'])
+  print "\n====================================================================================="
+  print "====================================================================================="
 #bsim_fullconspec = {}
 #bsim_fullconspec['work'] = bsim1_conspecs['work'] + bsim2_conspecs['work'] + bsim3_conspecs['work']
 #bsim_fullconspec['start_time'] = bsim1_conspecs['start_time'] + bsim2_conspecs['start_time'] + bsim3_conspecs['start_time']
@@ -128,39 +177,29 @@ def sim_print(sim):
 #bsim3 = Marketplace_2DRY( name = "EC2: group 3", instances = ec2_insts, consumers = bsim3_conspecs)
 
 ec2 = []
-ec2.append(instances(ec2_full.data))
-ec2.append(instances(ec2_nopar.data))
-ec2.append(instances(ec2_std.data))
-ec2.append(instances(ec2_min.data))
+ec2.append(instances(ec2_full.data)) #0
+ec2.append(instances(ec2_nopar.data)) #1
+ec2.append(instances(ec2_std.data)) #2
+ec2.append(instances(ec2_min.data)) #3
 
 def run_3gsim_p(name="Primary Market Test", idx=1, conspecs=0, rdepth=RDEPTH):
   sim1 = Marketplace( name=name, instances=ec2[idx], consumers = conspecs,
       rdepth= rdepth)
   sim1.start()
-  rtn = {}
-  rtn['inst'] =  sim1.results_inst()
-  rtn['cons'] =  sim1.results_cons()
-  rtn['mrkt'] =  sim1.results_primary()
   sim1.finish()
-  return rtn 
+  return sim1.results()
 
 def run_3gsim_2(name="Secondary Market Test", idx=1, conspecs=0, rdepth=RDEPTH): 
-
   sim1 = Marketplace_2DRY( name=name, instances=ec2[idx], consumers = conspecs,
       rdepth= rdepth)
   sim1.start()
-  rtn = {}
-  rtn['inst'] =  sim1.results_inst()
-  rtn['cons'] =  sim1.results_cons()
-  rtn['mrkt'] =  sim1.results_primary()
   sim1.finish()
-  return rtn 
+  return sim1.results()
+
 ###########################
 
 cons = loadconsumers(group=1, count=CONS, X=RealDistribution('lognormal',
-  [0, .50]))
+  [0, .75]))
 
-#sim1 = run_3gsim_p("PRIMARY", 2, cons)
-sim2 = run_3gsim_2("SECONDARY", 2, cons, 0)
-#sim_print(sim1)
-#sim_print(sim2)
+#sim_print(run_3gsim_p("PRIMARY", 3, cons))
+sim_print2(run_3gsim_2("SECONDARY", 3, cons))

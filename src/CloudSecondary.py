@@ -20,6 +20,17 @@ try:
 except ImportError:
   None
 
+gbuy = "def"
+
+def pulllisting(buff):
+  """ query the secondary listing for an id """
+  global gbuy
+  result = []
+  for i in buff:
+    if i.name == gbuy:
+      result.append(i)
+  return result 
+
 class Instance_2DRY(Instance): 
   def __init__(self, name, desc, unit, lease, oid):
     Instance.__init__(self, name, desc, unit, lease)
@@ -107,15 +118,16 @@ class Consumer_2DRY(Consumer):
             data = self.optimal_instance(data['rmdr'], instance_list, rdepth, data['work']+prvwork,
                 data['cost']+prvcost, data['time']+prvtime, depth+1)
             """ check the hash for best data """
-            self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
+            #self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
 
       # this maybe fucked when we're pulling rtime /inst data from cache.. (?)
       # if we're out of work and have left over time.. lets see what is worth!"
       if data['rmdr'] == 0 and data['rtime'] > 0: 
-        resale = self.analyize_resale_value(data, i, instance_list)
-        if resale['eff'] > data['eff']:
-          #resale eff is a combined eff?
-          data['eff'] = resale['eff']
+        None
+        # resale = self.analyize_resale_value(data, i, instance_list)
+       # if resale['eff'] > data['eff']:
+       #   #resale eff is a combined eff?
+       #   data['eff'] = resale['eff']
 
       if data['eff'] >= max_eff:
         if DEBUG: "d:",depth,"max eff updated:",i.desc, data['eff']
@@ -124,7 +136,7 @@ class Consumer_2DRY(Consumer):
         best_inst  = i
 
     """ get a fresh results """ 
-    rtn = best_inst.analyize(work)
+    rtn = best_inst.analyize(work, prvwork,prvtime,prvcost)
     rtn['inst'] = best_inst
     return rtn
 
@@ -139,7 +151,9 @@ class Consumer_2DRY(Consumer):
 
       FIXME: returns primary only
     """
-    self.marked = 0 # clear resale marker
+    global gbuy
+    gbuy = "clr" # clear resale marker FIXME:!
+    self.marked = 0
 
     """ optimal primary market instance (considers resale value) """
     rtn = self.optimal_instance(work, instance_list, self.sim.rdepth)
@@ -151,9 +165,11 @@ class Consumer_2DRY(Consumer):
      # # FIXME: strategy does not buy secondary w/ intent to resell, but should
       if secondary['eff'] > rtn['eff']:
         """ purchase from secondary """ 
-        print "THIS LINE WILL NT PRINT", secondary['inst'].results()
+        if DEBUG:
+          print "Secondary Pruchase:", secondary['inst'].results()
         rtn = secondary
-        self.marked = secondary['inst'].name
+        gbuy = secondary['inst'].name
+        self.marked = 1
 
     if DEBUG:
       print ">>",self.name,"todo",work,"PURCHASED:", rtn['inst'].name, rtn['inst'].desc,\
@@ -162,7 +178,6 @@ class Consumer_2DRY(Consumer):
     self.purchases.append(rtn['inst'].name)
     return rtn
     
-
   def process(self):
     """ process work by purchasing instances
     case 1: overshoot: completed work > expected work. We treat actual work
@@ -178,9 +193,11 @@ class Consumer_2DRY(Consumer):
       data = self.process_inner()
       if self.marked != 0:
         self.bookkeeping(data)
-        print "pulling from store??:"
-        yield get, self, self.sim.resale_list, self.sim.pulllisting  
-        print self.got, "%%%"
+        yield get, self, self.sim.resale_list,pulllisting  
+        #yield get, self, self.sim.resale_list, 1
+        data['inst'] = self.got.pop()
+        data['inst'].name = data['inst'].oid
+        self.sim.sold += 1
         yield hold, self, data['time']
       else:
         Consumer.bookkeeping(self, data) #record puchase details
@@ -200,6 +217,8 @@ class Consumer_2DRY(Consumer):
           unit = inst.unit, \
           lease = Lease(length = self.rtime, downp = resell['price'] , puc=inst.lease.puc)) 
       """ place listing into resale store (SimPY)"""
+      self.sim.books[inst.name]['resell'] += 1
+      self.sim.listed += 1
       yield put, self, self.sim.resale_list,[tosell]
     self.finished()
 
@@ -228,11 +247,11 @@ class Consumer_2DRY(Consumer):
     self.sim.books[rtn['inst'].oid]['time'] += rtn['time']
     self.sim.books[rtn['inst'].oid]['rtime'] += rtn['rtime']
 
-  def results(self):
-    """ return consumer data list """
-    time = self.finish - self.start # total time
-    return [self.name, self.work, self.actual, self.comp, self.spent, 
-        time, self.start, self.finish, self.rtime, self.purchases] 
+#  def results(self):
+#    """ return consumer data list """
+#    time = self.finish - self.start # total time
+#    return [self.name, self.work, self.actual, self.comp, self.spent, 
+#        time, self.start, self.finish, self.rtime, self.purchases] 
 
 
 class Marketplace_2DRY(Marketplace):
@@ -242,23 +261,15 @@ class Marketplace_2DRY(Marketplace):
     Marketplace.__init__(self, name, instances, consumers, rdepth, maxtime)
     """ secondary market objects """
     self.resale_list = Store(name="reseller list", sim=self, unitName="units",
-        monitored=False) # store of available resale instances
+        monitored=True) # store of available resale instances
     self.resale_fee = resale_fee
     self.income_2dry = 0
+    self.listed = 0
+    self.sold = 0
     """ extend records for secondary data """
     for inst in instances:
       self.books[inst.name]['resell'] = 0 # attempt
       self.books[inst.name]['resold'] = 0 # achieved
-
-  def pulllisting(self, buff):
-    """ query the secondary listing for an id """
-    """ search function for simulation store """
-    print "!!!!!!!!!!!!!!!!!!!"
-    result = []
-    for i in buff:
-      if i.name:
-        result.append(i)
-    return result 
 
   def spawn_consumers(self, specs):
     """ spawn and activate consumers for simulation """
@@ -268,13 +279,29 @@ class Marketplace_2DRY(Marketplace):
       self.consumers.append(con)
       self.activate(con, con.process(), at=con.start)
 
-  def results_secondary(self):
-    # THIS SUCKS -> return dict
-    print "Secondary Market Stats:"
-    print "# of entries:", self.resale_list.nrBuffered
-    print ':',[x.name for x in self.resale_list.theBuffer]
+  def results_mrkt(self):
+    rtn = Marketplace.results_mrkt(self)
+    #print "put queue", len(self.resale_list.putQ)
+    #print "get queue", len(self.resale_list.getQ)
+    #print 'Buff:',[x.name for x in self.resale_list.theBuffer]
+    #print "GB", gbuy
+    rtn['listed'] =  self.listed
+    rtn['sold'] =  self.sold  
+    rtn['unsold'] =  self.resale_list.nrBuffered
+    rtn['resale_fee'] = self.resale_fee
+    rtn['income_2dry'] = self.income_2dry
+    return rtn
     
+  def results_inst(self):
+    #return_set = {'name':[],'work':[],'income':[], 'time':[],'rtime':[]}
+    return_set = Marketplace.results_inst(self)
+    return_set['resell'] = []
+    return_set['resold'] = []
+    for inst in self.instances:
+      return_set['resell'].append(self.books[inst.name]['resell'])
+      return_set['resold'].append(self.books[inst.name]['resold'])
+    return return_set
+
   def finish(self):
     print self.name,'finished @',self.now()
-    self.results_secondary()
 # fin.
