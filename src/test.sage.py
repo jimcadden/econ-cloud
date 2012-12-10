@@ -17,7 +17,7 @@ ec2_min = CSVImport('/home/jmcadden/workspace/econ-cloud/src/ec2rates-useast_11-
 
 MAXWORK = 1000000
 MAXTIME = 100000000
-CONS = 10000
+CONS = 100000
 RDEPTH = 2 # recursion depth
 
 ############################################
