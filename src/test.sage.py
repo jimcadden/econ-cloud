@@ -15,9 +15,9 @@ ec2_min = CSVImport('/home/jmcadden/workspace/econ-cloud/src/ec2rates-useast_11-
 
 ############################################
 
-MAXWORK = 100000
+MAXWORK = 1000000
 MAXTIME = 100000000
-CONS = 10
+CONS = 10000
 RDEPTH = 2 # recursion depth
 
 ############################################
@@ -182,16 +182,17 @@ ec2.append(instances(ec2_nopar.data)) #1
 ec2.append(instances(ec2_std.data)) #2
 ec2.append(instances(ec2_min.data)) #3
 
-def run_3gsim_p(name="Primary Market Test", idx=1, conspecs=0, rdepth=RDEPTH):
+def run_3gsim_p(name="Primary Market Test", idx=1, conspecs=0, rdepth=RDEPTH,
+    cacheOn=False):
   sim1 = Marketplace( name=name, instances=ec2[idx], consumers = conspecs,
-      rdepth= rdepth)
+      rdepth= rdepth, cacheOn=cacheOn) 
   sim1.start()
   sim1.finish()
   return sim1.results()
 
 def run_3gsim_2(name="Secondary Market Test", idx=1, conspecs=0, rdepth=RDEPTH): 
   sim1 = Marketplace_2DRY( name=name, instances=ec2[idx], consumers = conspecs,
-      rdepth= rdepth)
+      rdepth= rdepth, cacheOn=False, buy2sell=False)
   sim1.start()
   sim1.finish()
   return sim1.results()
@@ -201,5 +202,9 @@ def run_3gsim_2(name="Secondary Market Test", idx=1, conspecs=0, rdepth=RDEPTH):
 cons = loadconsumers(group=1, count=CONS, X=RealDistribution('lognormal',
   [0, .75]))
 
-#sim_print(run_3gsim_p("PRIMARY", 3, cons))
-sim_print2(run_3gsim_2("SECONDARY", 3, cons))
+sim_print(run_3gsim_p("PRIMARY", 3, cons))
+
+print "CACHE ON!!!############################################"
+
+sim_print(run_3gsim_p("PRIMARY", 3, cons, RDEPTH, True))
+#sim_print2(run_3gsim_2("SECONDARY", 3, cons))

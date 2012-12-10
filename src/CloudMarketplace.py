@@ -114,16 +114,20 @@ class Consumer(Process):
         if data['rmdr'] > 0:
           if DEBUG: print "++", i.name,"| depth",depth,", rmdr",data['rmdr']
           """ check the hash for best data """
-          try:
-            data = self.sim.cache[data['work']*self.sim.cache_bucket(work)]
-            if DEBUG: print "++ cache hit:", self.sim.cache_bucket(work),"round",data['work']
-          except KeyError:
-            if DEBUG: print "++ cache miss:",self.sim.cache_bucket(work),"round",data['work']
-            data = self.optimal_instance(data['rmdr'], instance_list,rdepth, data['work']+prvwork,
+          if self.sim.cacheOn:
+            try:
+              data = self.sim.cache[data['work']*self.sim.cache_bucket(work)]
+              if DEBUG: print "++ cache hit:", self.sim.cache_bucket(work),"round",data['work']
+            except KeyError:
+              if DEBUG: print "++ cache miss:",self.sim.cache_bucket(work),"round",data['work']
+              data = self.optimal_instance(data['rmdr'], instance_list,rdepth, data['work']+prvwork,
                 data['cost']+prvcost, data['time']+prvtime, depth+1)
-            """ check the hash for best data """
-            #self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
-
+              """ check the hash for best data """
+              self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
+          else:
+            data = self.optimal_instance(data['rmdr'], instance_list,rdepth, data['work']+prvwork,
+              data['cost']+prvcost, data['time']+prvtime, depth+1)
+              
       if data['eff'] >= max_eff:
         """ if we've found a path with a better efficiency """
         max_eff = data['eff']
@@ -232,7 +236,8 @@ class Consumer(Process):
 ## stage ############################################################# 
 
 class Marketplace(Simulation):
-  def __init__(self, name, instances, consumers, rdepth=2, maxtime=100000000):
+  def __init__(self, name, instances, consumers, rdepth=2, maxtime=100000000,\
+      cacheOn=True):
     Simulation.__init__(self)
     self.name = name
     self.instances = instances 
@@ -246,6 +251,7 @@ class Marketplace(Simulation):
     self.income = 0
     self.finished = 0 # jobs completed 
     self.rtime = 0 # unused hours
+    self.cacheOn = cacheOn
     self.cache = {}
     """ populate our record datastruct """
     for inst in instances:

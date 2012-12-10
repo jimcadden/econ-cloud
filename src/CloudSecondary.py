@@ -56,19 +56,15 @@ class Consumer_2DRY(Consumer):
     resale1 = Consumer.optimal_instance(self, work_potential, instance_list,
         self.sim.rdepth)
     if DEBUG:
-      rtn=resale1
+      rtn=resale1 # this is for the print (lazy)
       print "#! RESALE:", inst.desc,  unit_potential, work_potential, cost_potential
       print ">>",self.name,"to sell",work_potential," COMPETITION:", rtn['inst'].desc,\
         rtn['cost'],rtn['eff'], rtn['rtime'], rtn['rmdr']
 
     """ find the best rated offering on the secondary market """
-    if self.sim.resale_list.getnrBuffered() > 0 :
-      if DEBUG:
-        print "#@! Scanning secondary offerings "
+    if self.sim.resale_list.getnrBuffered() > 0 and self.sim.price2sell :
       resale2 = Consumer.optimal_instance(self, work_potential, 
         self.sim.resale_list.theBuffer)
-      if DEBUG: 
-        print "#@! Finished  secondary offerings "
       best_eff =  resale1['eff'] if (resale1['eff']>resale2['eff']) else resale2['eff']
     else:
       best_eff = resale1['eff']
@@ -109,25 +105,30 @@ class Consumer_2DRY(Consumer):
         if data['rmdr'] > 0:
           if DEBUG: print "++ depth",depth,", rmdr",data['rmdr'],"++"
           """ check the hash for best data """
-          try:
-            data = self.sim.cache[data['work']*self.sim.cache_bucket(work)]
-            if DEBUG: 
-              print "@ cache hit:", self.sim.cache_bucket(work), "round",data['work']
-          except KeyError:
-            if DEBUG: print "@ cache miss:",self.sim.cache_bucket(work),"round",data['work']
-            data = self.optimal_instance(data['rmdr'], instance_list, rdepth, data['work']+prvwork,
+          if(self.sim.cacheOn):  
+            try:
+              data = self.sim.cache[data['work']*self.sim.cache_bucket(work)]
+              if DEBUG: 
+                print "@ cache hit:", self.sim.cache_bucket(work), "round",data['work']
+            except KeyError:
+              if DEBUG: print "@ cache miss:",self.sim.cache_bucket(work),"round",data['work']
+              data = self.optimal_instance(data['rmdr'], instance_list,\
+                  rdepth, data['work']+prvwork,\
                 data['cost']+prvcost, data['time']+prvtime, depth+1)
-            """ check the hash for best data """
-            #self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
+              """ check the hash for best data """
+              self.sim.cache[data['work']*self.sim.cache_bucket(work)] = data
+          else:
+            data = self.optimal_instance(data['rmdr'], instance_list, rdepth, data['work']+prvwork,
+              data['cost']+prvcost, data['time']+prvtime, depth+1)
+
 
       # this maybe fucked when we're pulling rtime /inst data from cache.. (?)
       # if we're out of work and have left over time.. lets see what is worth!"
-      if data['rmdr'] == 0 and data['rtime'] > 0: 
-        None
-        # resale = self.analyize_resale_value(data, i, instance_list)
-       # if resale['eff'] > data['eff']:
-       #   #resale eff is a combined eff?
-       #   data['eff'] = resale['eff']
+      if data['rmdr'] == 0 and data['rtime'] > 0 and self.sim.buy2sell: 
+        resale = self.analyize_resale_value(data, i, instance_list)
+        if resale['eff'] > data['eff']:
+          #resale eff is a combined eff?
+          data['eff'] = resale['eff']
 
       if data['eff'] >= max_eff:
         if DEBUG: "d:",depth,"max eff updated:",i.desc, data['eff']
@@ -257,8 +258,9 @@ class Consumer_2DRY(Consumer):
 class Marketplace_2DRY(Marketplace):
   """ Secondary Marketplace """
   def __init__(self, name, instances, consumers, rdepth=2, maxtime=100000000,
-      resale_fee=0.12):
-    Marketplace.__init__(self, name, instances, consumers, rdepth, maxtime)
+      resale_fee=0.12, cacheOn=False, buy2sell=False, price2sell=True):
+    Marketplace.__init__(self, name, instances, consumers, rdepth, maxtime,
+        cacheOn)
     """ secondary market objects """
     self.resale_list = Store(name="reseller list", sim=self, unitName="units",
         monitored=True) # store of available resale instances
@@ -266,6 +268,8 @@ class Marketplace_2DRY(Marketplace):
     self.income_2dry = 0
     self.listed = 0
     self.sold = 0
+    self.buy2sell = buy2sell
+    self.price2sell = price2sell
     """ extend records for secondary data """
     for inst in instances:
       self.books[inst.name]['resell'] = 0 # attempt
