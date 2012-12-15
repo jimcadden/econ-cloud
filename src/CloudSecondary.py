@@ -32,8 +32,9 @@ def pulllisting(buff):
   return result 
 
 class Instance_2DRY(Instance): 
-  def __init__(self, name, desc, unit, lease, oid):
+  def __init__(self, name, desc, unit, lease, oid, owner=None):
     Instance.__init__(self, name, desc, unit, lease)
+    self.owner = owner
     self.oid = oid #orignal instance id
 
 class Consumer_2DRY(Consumer):
@@ -84,7 +85,7 @@ class Consumer_2DRY(Consumer):
       print "$$$$ cost-pot, adj-cost", cost_potential, rs1_adj_cost
       print "$$$$ sale price / income", resale_max_price, resale_income
 
-    return {'price':resale_max_price, 'eff':eff}
+    return {'price':resale_max_price, 'eff':eff, 'income':resale_income}
 
   def optimal_instance(self, work, instance_list, rdepth=0, prvwork=0, prvcost=0,
       prvtime=0, depth=0):
@@ -123,11 +124,12 @@ class Consumer_2DRY(Consumer):
 
 
       # this maybe fucked when we're pulling rtime /inst data from cache.. (?)
-      # if we're out of work and have left over time.. lets see what is worth!"
-      if data['rmdr'] == 0 and data['rtime'] > 0 and self.sim.buy2sell: 
+      # if we're out of work and have left over time.. lets see what it is
+      # worth resold!"
+      if data['rmdr'] == 0 and data['rtime'] > 0 and self.sim.buy2sell and \
+        depth < 1: 
         resale = self.analyize_resale_value(data, i, instance_list)
         if resale['eff'] > data['eff']:
-          #resale eff is a combined eff?
           data['eff'] = resale['eff']
 
       if data['eff'] >= max_eff:
@@ -194,34 +196,46 @@ class Consumer_2DRY(Consumer):
       data = self.process_inner()
       if self.marked != 0:
         self.bookkeeping(data)
-        yield get, self, self.sim.resale_list,pulllisting  
-        #yield get, self, self.sim.resale_list, 1
+        yield get, self, self.sim.resale_list, pulllisting  
         data['inst'] = self.got.pop()
         data['inst'].name = data['inst'].oid
         self.sim.sold += 1
+        """ signal the seller process"""
+        self.interrupt(data['inst'].owner)
         yield hold, self, data['time']
       else:
         Consumer.bookkeeping(self, data) #record puchase details
         yield hold, self, data['time']
     #end while
+
     if data['rtime'] > 0: #global remaining time
       self.sim.rtime += data['rtime']
 
     """ secondary """
     """ We have leftover allocation we can resell """
+    # FIXME: consider a minimum of value to be resold. Do want a consumer
+    # sitting on the sale of one hour of an instance?
     if data['rtime'] >= data['inst'].unit.capacity * data['inst'].unit.time:
       if DEBUG:
         print "We have leftovers to sell", data['rtime'], data['inst'].desc
       inst = data['inst']
       resell = self.analyize_resale_value( data, inst, self.sim.instances)
       tosell = Instance_2DRY( oid=inst.name, name=self.name, desc=inst.desc,  \
-          unit = inst.unit, \
-          lease = Lease(length = self.rtime, downp = resell['price'] , puc=inst.lease.puc)) 
+        unit = inst.unit, \
+        lease = Lease(length = self.rtime, downp = resell['price'], \
+        puc=inst.lease.puc), \
+        owner=self) 
       """ place listing into resale store (SimPY)"""
       self.sim.books[inst.name]['resell'] += 1
       self.sim.listed += 1
       yield put, self, self.sim.resale_list,[tosell]
-    self.finished()
+      """ yield and wait for the unit to sell """
+      self.finished()
+      yield hold, self, 100000000000 #i.e, wait until end of time
+      if self.interrupted():
+        self.spent += (-1)*resell['income']
+    else:
+      self.finished()
 
   def finished(self):
     self.finish = self.sim.now()
@@ -257,8 +271,8 @@ class Consumer_2DRY(Consumer):
 
 class Marketplace_2DRY(Marketplace):
   """ Secondary Marketplace """
-  def __init__(self, name, instances, consumers, rdepth=2, maxtime=100000000,
-      resale_fee=0.12, cacheOn=False, buy2sell=False, price2sell=True):
+  def __init__(self, name, instances, consumers, rdepth=0, maxtime=100000000,
+      resale_fee=0.12, cacheOn=False, buy2sell=False, price2sell=False):
     Marketplace.__init__(self, name, instances, consumers, rdepth, maxtime,
         cacheOn)
     """ secondary market objects """

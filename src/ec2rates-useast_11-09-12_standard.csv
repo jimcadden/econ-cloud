@@ -2,3 +2,4 @@ Utilization,Level,Instance Type,Compute Units,Rate On-demand,Upfront 1YR,Rate 1Y
 light,Standard,small,1,0.065,69,0.039,106.3,0.031
 light,Standard,medium,2,0.13,138,0.078,212.5,0.063
 light,Standard,large,4,0.26,279,0.156,425.2,0.124
+light,Standard,extra large,8,0.52,552,0.312,850.4,0.248
